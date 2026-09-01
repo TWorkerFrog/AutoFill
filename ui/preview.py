@@ -55,9 +55,7 @@ class PreviewDialog(QDialog):
         btn_layout = QHBoxLayout()
 
         self.continue_btn = QPushButton("Продолжить генерацию")
-        self.continue_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; padding: 10px; font-weight: bold; }"
-        )
+        self.continue_btn.setObjectName("primary_btn")
         self.continue_btn.clicked.connect(self.accept)
         btn_layout.addWidget(self.continue_btn)
 

@@ -1,15 +1,17 @@
 import os
+
+from PySide6.QtCore import QUrl, Qt
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QCheckBox, QRadioButton,
     QButtonGroup, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
-    QTabWidget, QSpinBox, QDialog
+    QTabWidget, QSpinBox, QDialog, QSplitter
 )
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont, QColor, QDesktopServices
 from PIL import Image, ImageDraw
 
 from core.text_render import draw_text_block, check_text_bounds
-from core.name_format import format_name_lines, resolve_auto_lines
+from core.name_format import format_name_lines, resolve_auto_lines, plural
 from ui.point_picker import PointPickerDialog
 from ui.preview import PreviewDialog
 
@@ -24,8 +26,12 @@ class DiplomaGenerator(QMainWindow):
         self.font_path = ""
         self.text_color = (0, 0, 0)
         self.selected_font_family = ""
+        self.current_theme = "dark"
+        self.all_names = ""
+        self.all_excluded = ""
 
         self.create_ui()
+
 
     def create_ui(self):
         central = QWidget()
@@ -39,26 +45,50 @@ class DiplomaGenerator(QMainWindow):
         self.tab_position = QWidget()
         self.tab_format = QWidget()
         self.tab_output = QWidget()
+        self.tab_settings = QWidget()
 
         self.tabs.addTab(self.tab_main, "Основные")
         self.tabs.addTab(self.tab_position, "Позиция")
         self.tabs.addTab(self.tab_format, "Формат имени")
         self.tabs.addTab(self.tab_output, "Вывод")
+        self.tabs.addTab(self.tab_settings, "Настройки")
 
         self.build_tab_main()
         self.build_tab_position()
         self.build_tab_format()
         self.build_tab_output()
+        self.build_tab_settings()
 
+        # Кнопка генерации
         self.generate_btn = QPushButton("Сгенерировать грамоты")
-        self.generate_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; padding: 12px; font-size: 14px; font-weight: bold; }"
-        )
+        self.generate_btn.setObjectName("primary_btn")
         self.generate_btn.clicked.connect(self.generate_all)
         main_layout.addWidget(self.generate_btn)
 
+        # Нижняя панель: статус + кнопка открытия папки
+        bottom_layout = QHBoxLayout()
         self.status_label = QLabel("Готов к работе")
-        main_layout.addWidget(self.status_label)
+        bottom_layout.addWidget(self.status_label)
+
+        bottom_layout.addStretch()
+
+        self.open_dir_btn = QPushButton("Открыть папку")
+        self.open_dir_btn.setVisible(False)
+        self.open_dir_btn.clicked.connect(self.open_output_dir)
+        bottom_layout.addWidget(self.open_dir_btn)
+
+        main_layout.addLayout(bottom_layout)
+
+    # ============================================================
+    # ОТКРЫТИЕ ПАПКИ
+    # ============================================================
+
+    def open_output_dir(self):
+        output_dir = self.output_dir_edit.text() or "Грамоты"
+        full_path = os.path.abspath(output_dir)
+        if not os.path.exists(full_path):
+            os.makedirs(full_path, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(full_path))
 
     # ============================================================
     # ВКЛАДКА: ОСНОВНЫЕ
@@ -107,11 +137,27 @@ class DiplomaGenerator(QMainWindow):
         row3.addWidget(self.letter_spacing_spin)
         layout.addLayout(row3)
 
-        layout.addWidget(QLabel("Список ФИО (каждая строка — один человек):"))
+        # Подпись + поле + кнопки для основного списка
+        self.names_widget = QWidget()
+        names_layout = QVBoxLayout(self.names_widget)
+        names_layout.addWidget(QLabel("Список ФИО (каждая строка — один человек):"))
+
+        # Поиск
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Поиск по списку...")
+        self.search_edit.textChanged.connect(
+            lambda: self.filter_list(self.search_edit, self.names_text, "all_names")
+        )
+        names_layout.addWidget(self.search_edit)
+
         self.names_text = QTextEdit()
         self.names_text.setPlaceholderText("Иванов Иван Иванович\nПетров Пётр Петрович\n...")
-        layout.addWidget(self.names_text)
+        self.names_text.textChanged.connect(
+            lambda: self.update_all_data(self.search_edit, self.names_text, "all_names")
+        )
+        names_layout.addWidget(self.names_text)
 
+        # Кнопки
         btn_row1 = QHBoxLayout()
         btn_load = QPushButton("Загрузить файл")
         btn_load.clicked.connect(self.load_names_file)
@@ -119,13 +165,28 @@ class DiplomaGenerator(QMainWindow):
         btn_clear = QPushButton("Очистить")
         btn_clear.clicked.connect(lambda: self.names_text.clear())
         btn_row1.addWidget(btn_clear)
-        layout.addLayout(btn_row1)
+        names_layout.addLayout(btn_row1)
 
-        layout.addWidget(QLabel("Исключения (сюда попадают те, кто не влез):"))
+        # Подпись + поле + кнопки для исключений
+        self.excluded_widget = QWidget()
+        excluded_layout = QVBoxLayout(self.excluded_widget)
+        excluded_layout.addWidget(QLabel("Исключения (сюда попадают те, кто не влез):"))
+
+        self.excluded_search_edit = QLineEdit()
+        self.excluded_search_edit.setPlaceholderText("Поиск по исключениям...")
+        self.excluded_search_edit.textChanged.connect(
+            lambda: self.filter_list(self.excluded_search_edit, self.excluded_text, "all_excluded")
+        )
+        excluded_layout.addWidget(self.excluded_search_edit)
+
         self.excluded_text = QTextEdit()
         self.excluded_text.setPlaceholderText("Сюда попадут ФИО, которые не влезли в границы")
-        layout.addWidget(self.excluded_text)
+        self.excluded_text.textChanged.connect(
+            lambda: self.update_all_data(self.excluded_search_edit, self.excluded_text, "all_excluded")
+        )
+        excluded_layout.addWidget(self.excluded_text)
 
+        # Кнопки
         btn_row2 = QHBoxLayout()
         btn_clear_excl = QPushButton("Очистить исключения")
         btn_clear_excl.clicked.connect(lambda: self.excluded_text.clear())
@@ -133,7 +194,18 @@ class DiplomaGenerator(QMainWindow):
         btn_move = QPushButton("Перенести в основной")
         btn_move.clicked.connect(self.move_excluded_to_main)
         btn_row2.addWidget(btn_move)
-        layout.addLayout(btn_row2)
+        excluded_layout.addLayout(btn_row2)
+
+        self.ask_before_move = QCheckBox("Спрашивать перед переносом исключений")
+        self.ask_before_move.setChecked(False)
+        excluded_layout.addWidget(self.ask_before_move)
+
+        # Сплиттер
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(self.names_widget)
+        splitter.addWidget(self.excluded_widget)
+        splitter.setSizes([350, 200])
+        layout.addWidget(splitter)
 
     def choose_template(self):
         path, _ = QFileDialog.getOpenFileName(self, "Выбери шаблон", "", "Изображения (*.jpg *.jpeg *.png)")
@@ -165,18 +237,84 @@ class DiplomaGenerator(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Выбери файл со списком", "", "Текст (*.txt)")
         if path:
             with open(path, encoding="utf-8") as f:
-                self.names_text.setPlainText(f.read())
+                content = f.read()
+            self.all_names = content
+            self.names_text.setPlainText(content)
+            self.search_edit.clear()
 
     def get_names_list(self):
-        text = self.names_text.toPlainText()
+        text = self.all_names if self.all_names else self.names_text.toPlainText()
         return [line.strip().split() for line in text.split("\n") if line.strip()]
 
     def move_excluded_to_main(self):
         excluded = self.excluded_text.toPlainText().strip()
-        if excluded:
-            current = self.names_text.toPlainText()
-            self.names_text.setPlainText(current.rstrip() + "\n" + excluded + "\n")
-            self.excluded_text.clear()
+        if not excluded:
+            return
+
+        if self.ask_before_move.isChecked():
+            choice = QMessageBox.question(
+                self,
+                "Перенос исключений",
+                "Очистить основной список перед переносом?",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            if choice == QMessageBox.Cancel:
+                return
+            elif choice == QMessageBox.Yes:
+                self.names_text.setPlainText(excluded)
+            # Если Нет — просто очищаем исключения
+        else:
+            self.names_text.setPlainText(excluded)
+
+        self.excluded_text.clear()
+
+    def update_all_names(self):
+        """Сохраняет полный список при изменении текста."""
+        if not self.search_edit.text().strip():
+            self.all_names = self.names_text.toPlainText()
+
+    def filter_list(self, search_edit, text_edit, all_data_attr):
+        """Универсальный фильтр для списков."""
+        search_text = search_edit.text().strip().lower()
+        all_data = getattr(self, all_data_attr)
+
+        if not search_text:
+            if all_data:
+                text_edit.setPlainText(all_data)
+            return
+
+        if not all_data:
+            all_data = text_edit.toPlainText()
+            setattr(self, all_data_attr, all_data)
+
+        lines = all_data.split("\n")
+        filtered = [line for line in lines if search_text in line.lower()]
+        text_edit.setPlainText("\n".join(filtered))
+
+    def update_all_data(self, search_edit, text_edit, all_data_attr):
+        search_text = search_edit.text().strip()
+
+        if not search_text:
+            # Если поиск пуст — сохраняем как есть
+            setattr(self, all_data_attr, text_edit.toPlainText())
+        else:
+            # Если поиск активен — обновляем all_data с учётом изменений
+            all_data = getattr(self, all_data_attr, "")
+            if not all_data:
+                return
+
+            # Получаем отфильтрованные строки (которые сейчас в text_edit)
+            visible_lines = text_edit.toPlainText().split("\n")
+            visible_set = set(line.strip() for line in visible_lines if line.strip())
+
+            # Обновляем all_data: убираем удалённые, оставляем всё остальное
+            all_lines = all_data.split("\n")
+            updated_lines = []
+            for line in all_lines:
+                if line.strip() in visible_set or search_text.lower() not in line.lower():
+                    updated_lines.append(line)
+
+            setattr(self, all_data_attr, "\n".join(updated_lines))
 
     # ============================================================
     # ВКЛАДКА: ПОЗИЦИЯ
@@ -242,7 +380,7 @@ class DiplomaGenerator(QMainWindow):
         if not self.template_path:
             QMessageBox.warning(self, "Нет шаблона", "Сначала выбери шаблон грамоты.")
             return
-        # Получаем текущие координаты
+
         try:
             current_x = int(self.x_edit.text()) if not self.x_auto_check.isChecked() else None
             current_y = int(self.y_edit.text()) if not self.y_auto_check.isChecked() else None
@@ -251,6 +389,7 @@ class DiplomaGenerator(QMainWindow):
             current_y = None
 
         dialog = PointPickerDialog(self.template_path, self, current_x, current_y)
+        dialog.setProperty("theme", self.current_theme)
         if dialog.exec() == QDialog.Accepted:
             x, y = dialog.get_point()
             if not self.x_auto_check.isChecked():
@@ -377,6 +516,44 @@ class DiplomaGenerator(QMainWindow):
         return "multi" if self.rb_multi.isChecked() else "single"
 
     # ============================================================
+    # ВКЛАДКА: НАСТРОЙКИ
+    # ============================================================
+
+    def build_tab_settings(self):
+        layout = QVBoxLayout(self.tab_settings)
+
+        layout.addWidget(QLabel("Тема оформления:"))
+
+        self.theme_group = QButtonGroup(self)
+        self.rb_dark = QRadioButton("Тёмная")
+        self.rb_light = QRadioButton("Светлая")
+        self.rb_dark.setChecked(True)
+        self.theme_group.addButton(self.rb_dark)
+        self.theme_group.addButton(self.rb_light)
+
+        layout.addWidget(self.rb_dark)
+        layout.addWidget(self.rb_light)
+
+        self.rb_dark.toggled.connect(self.change_theme)
+        self.rb_light.toggled.connect(self.change_theme)
+
+        layout.addStretch()
+
+    def change_theme(self):
+        theme = "light" if self.rb_light.isChecked() else "dark"
+
+        for widget in self.findChildren(QWidget):
+            widget.setProperty("theme", theme)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+        self.setProperty("theme", theme)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+        # Сохраняем текущую тему
+        self.current_theme = theme
+    # ============================================================
     # ШРИФТ
     # ============================================================
 
@@ -463,6 +640,7 @@ class DiplomaGenerator(QMainWindow):
             return 0
 
         dialog = PreviewDialog(preview_path, self)
+        dialog.setProperty("theme", self.current_theme)
         result = dialog.exec()
         return result
 
@@ -582,8 +760,23 @@ class DiplomaGenerator(QMainWindow):
                 pdf_path = os.path.join(output_dir, f"{self.pdf_name_edit.text()}.pdf")
                 pdf_pages[0].save(pdf_path, "PDF", resolution=100.0, save_all=True, append_images=pdf_pages[1:])
 
-            self.status_label.setText(f"Готово! {len(generated_people)} грамот в «{output_dir}»")
-            QMessageBox.information(self, "Готово", f"Создано {len(generated_people)} грамот.\nИсключено: {len(problematic)}.")
+            # Финальное сообщение
+            count = len(generated_people)
+            word = plural(count, ("грамота", "грамоты", "грамот"))
+            excluded_count = len(problematic)
+
+            self.status_label.setText(f"Готово! {count} {word} в папке «{output_dir}»")
+            self.open_dir_btn.setVisible(True)
+
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Готово")
+            msg_box.setText(f"Создано {count} {word}.\nИсключено: {excluded_count}.")
+            btn_open = msg_box.addButton("Открыть папку", QMessageBox.ActionRole)
+            btn_close = msg_box.addButton("Закрыть", QMessageBox.RejectRole)
+            msg_box.exec()
+
+            if msg_box.clickedButton() == btn_open:
+                self.open_output_dir()
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))

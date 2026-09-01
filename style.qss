@@ -1,0 +1,221 @@
+/* ============================================
+   ТЁМНАЯ ТЕМА (по умолчанию)
+   ============================================ */
+
+QMainWindow {
+    background-color: #222222;
+}
+
+QWidget {
+    background-color: #222222;
+    color: #F2F2F2;
+    font-size: 13px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #3A3A3A;
+    background-color: #222222;
+    border-radius: 8px;
+}
+
+QTabBar::tab {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    padding: 8px 18px;
+    border: 1px solid #3A3A3A;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+QTabBar::tab:selected {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    padding: 8px 15px;
+    border-radius: 6px;
+}
+
+QPushButton:hover {
+    background-color: #3A3A3A;
+}
+
+QPushButton:pressed {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton#primary_btn {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+    font-weight: bold;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+QPushButton#primary_btn:hover {
+    background-color: #AD83F3;
+}
+
+QLineEdit, QTextEdit, QSpinBox {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus {
+    border-color: #7F43E3;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #2A2A2A;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #7F43E3;
+    border-color: #3A3A3A;
+}
+
+QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #2A2A2A;
+    border: 1px solid #3A3A3A;
+    border-radius: 9px;
+}
+
+QRadioButton::indicator:checked {
+    background-color: #7F43E3;
+    border-color: #3A3A3A;
+}
+
+QLabel {
+    color: #F2F2F2;
+}
+
+QDialog {
+    background-color: #222222;
+}
+
+QSpinBox::up-button, QSpinBox::down-button {
+    width: 20px;
+    background-color: #2A2A2A;
+    border: none;
+    border-radius: 3px;
+}
+
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+    background-color: #3A3A3A;
+}
+
+
+/* ============================================
+   СВЕТЛАЯ ТЕМА
+   ============================================ */
+
+QMainWindow[theme="light"] {
+    background-color: #F2F2F2;
+}
+
+QWidget[theme="light"] {
+    background-color: #F2F2F2;
+    color: #0D0D0D;
+}
+
+QTabWidget[theme="light"]::pane {
+    border: 1px solid #CCCCCC;
+    background-color: #F2F2F2;
+}
+
+QTabBar[theme="light"]::tab {
+    background-color: #E0E0E0;
+    color: #0D0D0D;
+    border: 1px solid #CCCCCC;
+}
+
+QTabBar[theme="light"]::tab:selected {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton[theme="light"] {
+    background-color: #E0E0E0;
+    color: #0D0D0D;
+    border: 1px solid #CCCCCC;
+}
+
+QPushButton[theme="light"]:hover {
+    background-color: #D0D0D0;
+}
+
+QPushButton[theme="light"]:pressed {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton[theme="light"]#primary_btn {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+    font-weight: bold;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+QLineEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"] {
+    background-color: #F2F2F2;
+    color: #0D0D0D;
+    border: 1px solid #CCCCCC;
+}
+
+
+
+QCheckBox[theme="light"]::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #F2F2F2;
+    border: 1px solid #CCCCCC;
+    border-radius: 4px;
+}
+
+QCheckBox[theme="light"]::indicator:checked {
+    background-color: #7F43E3;
+    border-color: #CCCCCC;
+}
+
+QRadioButton[theme="light"]::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #F2F2F2;
+    border: 1px solid #CCCCCC;
+    border-radius: 9px;
+}
+
+QRadioButton[theme="light"]::indicator:checked {
+    background-color: #7F43E3;
+    border-color: #CCCCCC;
+}
+
+QLabel[theme="light"] {
+    color: #0D0D0D;
+}
+
+QDialog[theme="light"] {
+    background-color: #F2F2F2;
+}
+
+QSpinBox[theme="light"]::up-button, QSpinBox[theme="light"]::down-button {
+    background-color: #E0E0E0;
+}

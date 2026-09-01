@@ -85,9 +85,7 @@ class PointPickerDialog(QDialog):
         zoom_layout.addStretch()
 
         self.ok_btn = QPushButton("Готово")
-        self.ok_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; padding: 12px; font-size: 14px; font-weight: bold; }"
-        )
+        self.ok_btn.setObjectName("primary_btn")
         self.ok_btn.setMinimumHeight(40)
         self.ok_btn.clicked.connect(self.accept)
 

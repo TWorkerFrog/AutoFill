@@ -32,3 +32,15 @@ def resolve_auto_lines(parts, font, letter_spacing, img_width, margin):
     if w > safe_width and len(parts) > 1:
         return [parts[0], " ".join(parts[1:])]
     return [single_line]
+
+def plural(n, forms):
+    """forms = ('грамота', 'грамоты', 'грамот')"""
+    n = abs(n) % 100
+    if 11 <= n <= 19:
+        return forms[2]
+    n = n % 10
+    if n == 1:
+        return forms[0]
+    elif 2 <= n <= 4:
+        return forms[1]
+    return forms[2]
