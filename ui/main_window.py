@@ -20,7 +20,7 @@ class DiplomaGenerator(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Генератор грамот")
-        self.resize(900, 800)
+        self.resize(800, 800)
 
         self.template_path = ""
         self.font_path = ""
@@ -316,6 +316,16 @@ class DiplomaGenerator(QMainWindow):
 
             setattr(self, all_data_attr, "\n".join(updated_lines))
 
+    def apply_theme_to_dialog(self, dialog, theme):
+        """Применяет тему к диалогу и всем его дочерним виджетам."""
+        dialog.setProperty("theme", theme)
+        for widget in dialog.findChildren(QWidget):
+            widget.setProperty("theme", theme)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+        dialog.style().unpolish(dialog)
+        dialog.style().polish(dialog)
+
     # ============================================================
     # ВКЛАДКА: ПОЗИЦИЯ
     # ============================================================
@@ -388,8 +398,9 @@ class DiplomaGenerator(QMainWindow):
             current_x = None
             current_y = None
 
-        dialog = PointPickerDialog(self.template_path, self, current_x, current_y)
-        dialog.setProperty("theme", self.current_theme)
+        align = "left" if self.rb_left.isChecked() else "center"
+        dialog = PointPickerDialog(self.template_path, self, current_x, current_y, align)
+        self.apply_theme_to_dialog(dialog, self.current_theme)
         if dialog.exec() == QDialog.Accepted:
             x, y = dialog.get_point()
             if not self.x_auto_check.isChecked():
@@ -640,7 +651,7 @@ class DiplomaGenerator(QMainWindow):
             return 0
 
         dialog = PreviewDialog(preview_path, self)
-        dialog.setProperty("theme", self.current_theme)
+        self.apply_theme_to_dialog(dialog, self.current_theme)
         result = dialog.exec()
         return result
 
@@ -659,16 +670,21 @@ class DiplomaGenerator(QMainWindow):
             return
 
         if self.preview_check.isChecked():
-            if not self.make_preview():
-                return
+            while True:
+                if not self.make_preview():
+                    return
 
-            result = self.show_preview_dialog()
-            if result == 0:
-                self.status_label.setText("Отменено пользователем")
-                return
-            elif result == 2:
-                self.pick_position()
-                return
+                result = self.show_preview_dialog()
+
+                if result == 0:  # Отмена
+                    self.status_label.setText("Отменено пользователем")
+                    return
+                elif result == 2:  # Редактировать позицию
+                    self.pick_position()
+                    # После выбора точки — снова показываем превью
+                    continue
+                else:  # Продолжить (accept)
+                    break
 
         try:
             template = Image.open(self.template_path)

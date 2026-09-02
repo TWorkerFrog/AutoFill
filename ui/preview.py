@@ -19,10 +19,13 @@ class PreviewDialog(QDialog):
         self.view.setRenderHint(self.view.renderHints())
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
 
-        screen = self.screen().availableGeometry()
-        self.view_w = int(screen.width() * 0.85)
-        self.view_h = int(screen.height() * 0.8)
-        self.view.setFixedSize(self.view_w, self.view_h)
+        self.resize(900, 800)
+        if parent:
+            parent_center = parent.screen().availableGeometry().center()
+            self.move(
+                parent_center.x() - self.width() // 2,
+                parent_center.y() - self.height() // 2
+            )
 
         pixmap = QPixmap(image_path)
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
@@ -67,6 +70,7 @@ class PreviewDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
 
+        # Центрируем относительно родителя
         layout.addLayout(btn_layout)
 
     def zoom_in(self):

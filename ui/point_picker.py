@@ -9,9 +9,11 @@ from PIL import Image
 
 
 class PointPickerDialog(QDialog):
-    def __init__(self, image_path, parent=None, initial_x=None, initial_y=None):
+    def __init__(self, image_path, parent=None, initial_x=None, initial_y=None, align="left"):
         super().__init__(parent)
-        self.setWindowTitle("Укажи точку — центр текста")
+        self.setWindowTitle("Укажи точку")
+
+        self.align = align
 
         self.image_path = image_path
         self.pil_image = Image.open(image_path)
@@ -39,10 +41,13 @@ class PointPickerDialog(QDialog):
         self.pixmap_item = QGraphicsPixmapItem(self.pixmap)
         self.scene.addItem(self.pixmap_item)
 
-        screen = self.screen().availableGeometry()
-        self.view_w = int(screen.width() * 0.85)
-        self.view_h = int(screen.height() * 0.8)
-        self.view.setFixedSize(self.view_w, self.view_h)
+        self.resize(900, 800)
+        if parent:
+            parent_center = parent.screen().availableGeometry().center()
+            self.move(
+                parent_center.x() - self.width() // 2,
+                parent_center.y() - self.height() // 2
+            )
 
         self.scale_factor = 1.0
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
@@ -90,13 +95,19 @@ class PointPickerDialog(QDialog):
         self.ok_btn.clicked.connect(self.accept)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Правая кнопка мыши — поставить точку (центр текста)"))
+        if self.align == "left":
+            hint = "Правая кнопка мыши — поставить точку (левый край, центр по вертикали)"
+        else:
+            hint = "Правая кнопка мыши — поставить точку (центр текста)"
+        layout.addWidget(QLabel(hint))
         layout.addWidget(QLabel("Левая кнопка — перетаскивание | Колесо мыши — зум | Стрелки — сдвиг | Shift — 10px | Ctrl — 50px | Alt — расстояние"))
-        layout.addWidget(self.view, alignment=Qt.AlignCenter)
+        layout.addWidget(self.view)
         layout.addLayout(zoom_layout)
         layout.addWidget(self.info_label)
         layout.addWidget(self.ok_btn)
         self.setLayout(layout)
+
+
 
         self.view.mousePressEvent = self.on_mouse_press
         self.view.keyPressEvent = self.on_key_press
