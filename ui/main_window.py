@@ -14,7 +14,8 @@ from core.text_render import draw_text_block, check_text_bounds
 from core.name_format import format_name_lines, resolve_auto_lines, plural
 from ui.point_picker import PointPickerDialog
 from ui.preview import PreviewDialog
-
+from ui.font_picker import FontPickerDialog
+from core.font_utils import get_system_font_path
 
 class DiplomaGenerator(QMainWindow):
     def __init__(self):
@@ -29,6 +30,7 @@ class DiplomaGenerator(QMainWindow):
         self.current_theme = "dark"
         self.all_names = ""
         self.all_excluded = ""
+        self.selected_font_style = "Regular"
 
         self.create_ui()
 
@@ -221,11 +223,22 @@ class DiplomaGenerator(QMainWindow):
             self.selected_font_family = ""
 
     def choose_system_font(self):
-        ok, font = QFontDialog.getFont(self)
-        if ok:
-            self.selected_font_family = font.family()
-            self.font_path = ""
-            self.font_edit.setText(f"[Системный] {font.family()}")
+        dialog = FontPickerDialog(
+            self,
+            self.selected_font_family,
+            self.font_size_spin.value(),
+            self.selected_font_style
+        )
+        self.apply_theme_to_dialog(dialog, self.current_theme)
+
+        if dialog.exec() == QDialog.Accepted:
+            family, size, style = dialog.get_selected_font()
+            if family:
+                self.selected_font_family = family
+                self.selected_font_style = style
+                self.font_path = ""
+                self.font_edit.setText(f"[Системный] {family} {style}")
+                self.font_size_spin.setValue(size)
 
     def choose_color(self):
         color = QColorDialog.getColor()
@@ -571,10 +584,23 @@ class DiplomaGenerator(QMainWindow):
     def get_font(self):
         from PIL import ImageFont
         size = self.font_size_spin.value()
+
+        print(f"=== get_font ===")
+        print(f"font_path: {self.font_path}")
+        print(f"selected_font_family: {self.selected_font_family}")
+        print(f"selected_font_style: {getattr(self, 'selected_font_style', None)}")
+
         if self.font_path:
+            print(f"Использую файл: {self.font_path}")
             return ImageFont.truetype(self.font_path, size=size)
-        else:
-            return ImageFont.truetype("arial.ttf", size=size)
+        elif self.selected_font_family:
+            path = get_system_font_path(self.selected_font_family, getattr(self, "selected_font_style", None))
+            print(f"Найден путь: {path}")
+            if path:
+                return ImageFont.truetype(path, size=size)
+
+        print("Использую arial.ttf")
+        return ImageFont.truetype("arial.ttf", size=size)
 
     # ============================================================
     # ПРЕВЬЮ
