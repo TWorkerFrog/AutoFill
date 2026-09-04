@@ -111,14 +111,14 @@ QDialog {
 
 QSpinBox::up-button, QSpinBox::down-button {
     width: 20px;
-    background-color: #2A2A2A;
-    border: none;
+    background-color: #3A3A3A;
     border-radius: 3px;
 }
 
 QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-    background-color: #3A3A3A;
+    background-color: #4E4E4E;
 }
+
 
 
 /* ============================================
@@ -218,4 +218,8 @@ QDialog[theme="light"] {
 
 QSpinBox[theme="light"]::up-button, QSpinBox[theme="light"]::down-button {
     background-color: #E0E0E0;
+}
+
+QSpinBox[theme="light"]::up-button:hover, QSpinBox[theme="light"]::down-button:hover {
+    background-color: #C4C4C4;
 }

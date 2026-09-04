@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImage, QColor, QPen, QBrush
 from PIL import Image
+from core.screen_utils import get_window_size, center_window
 
 
 class PointPickerDialog(QDialog):
@@ -41,7 +42,8 @@ class PointPickerDialog(QDialog):
         self.pixmap_item = QGraphicsPixmapItem(self.pixmap)
         self.scene.addItem(self.pixmap_item)
 
-        self.resize(900, 800)
+        w, h = get_window_size(self, 0.7, 0.75)
+        self.resize(w, h)
         if parent:
             parent_center = parent.screen().availableGeometry().center()
             self.move(

@@ -1,4 +1,5 @@
 import os
+import json
 
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtWidgets import (
@@ -8,20 +9,29 @@ from PySide6.QtWidgets import (
     QTabWidget, QSpinBox, QDialog, QSplitter
 )
 from PySide6.QtGui import QFont, QColor, QDesktopServices
+from PySide6.QtWidgets import QFrame
 from PIL import Image, ImageDraw
 
 from core.text_render import draw_text_block, check_text_bounds
 from core.name_format import format_name_lines, resolve_auto_lines, plural
+from core.font_utils import get_system_font_path
+from core.name_format import plural_instrumental
+from core.screen_utils import get_window_size
 from ui.point_picker import PointPickerDialog
 from ui.preview import PreviewDialog
 from ui.font_picker import FontPickerDialog
-from core.font_utils import get_system_font_path
+from ui.message_dialog import MessageDialog
+
+
 
 class DiplomaGenerator(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Генератор грамот")
-        self.resize(800, 800)
+        w, h = get_window_size(self, 0.55, 0.75)
+        self.resize(w, h)
+        self.settings_file = "settings.json"
+        self.load_settings()
 
         self.template_path = ""
         self.font_path = ""
@@ -81,6 +91,68 @@ class DiplomaGenerator(QMainWindow):
 
         main_layout.addLayout(bottom_layout)
 
+    def load_settings(self):
+        """Загружает настройки при запуске."""
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+
+                # Применяем настройки после создания UI
+                self.apply_settings(settings)
+            except:
+                pass
+
+    def apply_settings(self, settings):
+        """Применяет загруженные настройки."""
+        if "font_size" in settings:
+            self.font_size_spin.setValue(settings["font_size"])
+        if "template_path" in settings:
+            self.template_path = settings["template_path"]
+            self.template_edit.setText(settings["template_path"])
+        if "font_path" in settings:
+            self.font_path = settings["font_path"]
+            self.font_edit.setText(settings["font_path"])
+        if "output_dir" in settings:
+            self.output_dir_edit.setText(settings["output_dir"])
+        if "theme" in settings:
+            if settings["theme"] == "light":
+                self.rb_light.setChecked(True)
+            else:
+                self.rb_dark.setChecked(True)
+        # ... и т.д.
+
+    def save_settings(self):
+        """Сохраняет текущие настройки."""
+        settings = {
+            "font_size": self.font_size_spin.value(),
+            "template_path": self.template_path,
+            "font_path": self.font_path,
+            "output_dir": self.output_dir_edit.text(),
+            "theme": self.current_theme,
+            # ... и т.д.
+        }
+        with open(self.settings_file, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=4)
+
+    def closeEvent(self, event):
+        """Вызывается при закрытии окна."""
+        dialog = MessageDialog(
+            self,
+            "Выход",
+            "Сохранить настройки перед выходом?",
+            buttons=[("Сохранить", "primary"), ("Не сохранять", ""), ("Отмена", "")]
+        )
+        self.apply_theme_to_dialog(dialog, self.current_theme)
+        dialog.exec()
+
+        if dialog.result == 0:  # Сохранить
+            self.save_settings()
+            event.accept()
+        elif dialog.result == 1:  # Не сохранять
+            event.accept()
+        else:  # Отмена
+            event.ignore()
     # ============================================================
     # ОТКРЫТИЕ ПАПКИ
     # ============================================================
@@ -123,8 +195,9 @@ class DiplomaGenerator(QMainWindow):
         row3 = QHBoxLayout()
         row3.addWidget(QLabel("Размер:"))
         self.font_size_spin = QSpinBox()
+        self.font_size_spin.setSpecialValueText("—")
         self.font_size_spin.setRange(8, 500)
-        self.font_size_spin.setValue(48)
+        self.font_size_spin.setValue(0)
         row3.addWidget(self.font_size_spin)
 
         row3.addWidget(QLabel("Цвет:"))
@@ -264,20 +337,45 @@ class DiplomaGenerator(QMainWindow):
         if not excluded:
             return
 
+        excluded_people = [line.strip().split() for line in excluded.split("\n") if line.strip()]
+        current_people = self.get_names_list()
+
         if self.ask_before_move.isChecked():
-            choice = QMessageBox.question(
+            # Спрашиваем
+            dialog = MessageDialog(
                 self,
                 "Перенос исключений",
                 "Очистить основной список перед переносом?",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                buttons=[("Да", "primary"), ("Нет", ""), ("Отмена", "")]
             )
-            if choice == QMessageBox.Cancel:
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+
+            if dialog.result == 2:  # Отмена
                 return
-            elif choice == QMessageBox.Yes:
-                self.names_text.setPlainText(excluded)
-            # Если Нет — просто очищаем исключения
+            elif dialog.result == 0:  # Да
+                # Очищаем и вставляем все исключения
+                self.names_text.setPlainText("\n".join(" ".join(p) for p in excluded_people))
+                self.excluded_text.clear()
+                return
+            # Если Нет — проверяем, кого нет в основном списке
+            missing = [
+                p for p in excluded_people
+                if not self.is_person_in_list(p, current_people)
+            ]
+
+            if missing:
+                # Добавляем отсутствующих в конец
+                current_text = self.names_text.toPlainText().strip()
+                if current_text:
+                    self.names_text.setPlainText(
+                        current_text + "\n" + "\n".join(" ".join(p) for p in missing)
+                    )
+                else:
+                    self.names_text.setPlainText("\n".join(" ".join(p) for p in missing))
         else:
-            self.names_text.setPlainText(excluded)
+            # Не спрашиваем — просто очищаем и вставляем
+            self.names_text.setPlainText("\n".join(" ".join(p) for p in excluded_people))
 
         self.excluded_text.clear()
 
@@ -338,6 +436,17 @@ class DiplomaGenerator(QMainWindow):
             widget.style().polish(widget)
         dialog.style().unpolish(dialog)
         dialog.style().polish(dialog)
+
+    def is_person_in_list(self, person_parts, people_list):
+        """Проверяет, есть ли человек в списке."""
+        person_key = "_".join(person_parts)
+
+        for existing_parts in people_list:
+            existing_key = "_".join(existing_parts)
+            if person_key == existing_key:
+                return True
+
+        return False
 
     # ============================================================
     # ВКЛАДКА: ПОЗИЦИЯ
@@ -501,7 +610,7 @@ class DiplomaGenerator(QMainWindow):
 
         row3 = QHBoxLayout()
         row3.addWidget(QLabel("Имя общего PDF:"))
-        self.pdf_name_edit = QLineEdit("все_грамоты")
+        self.pdf_name_edit = QLineEdit("Все_грамоты")
         row3.addWidget(self.pdf_name_edit)
         layout.addLayout(row3)
 
@@ -509,6 +618,9 @@ class DiplomaGenerator(QMainWindow):
         row4.addWidget(QLabel("Папка для сохранения:"))
         self.output_dir_edit = QLineEdit("Грамоты")
         row4.addWidget(self.output_dir_edit)
+        btn_browse = QPushButton("Обзор")
+        btn_browse.clicked.connect(self.choose_output_dir)
+        row4.addWidget(btn_browse)
         layout.addLayout(row4)
 
         self.preview_check = QCheckBox("Превью перед генерацией")
@@ -539,6 +651,15 @@ class DiplomaGenerator(QMainWindow):
     def get_pdf_mode(self):
         return "multi" if self.rb_multi.isChecked() else "single"
 
+    def choose_output_dir(self):
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Выбери папку для сохранения",
+            self.output_dir_edit.text() or "."
+        )
+        if path:
+            self.output_dir_edit.setText(path)
+
     # ============================================================
     # ВКЛАДКА: НАСТРОЙКИ
     # ============================================================
@@ -562,6 +683,44 @@ class DiplomaGenerator(QMainWindow):
         self.rb_light.toggled.connect(self.change_theme)
 
         layout.addStretch()
+
+        # Разделитель
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
+
+        # О программе
+        layout.addWidget(QLabel("О программе"))
+        layout.addWidget(QLabel("AutoFillSurnames"))
+        layout.addWidget(QLabel("Версия 1.0.0"))
+
+        # Авторы
+        layout.addWidget(QLabel("Авторы:"))
+        layout.addWidget(QLabel("Alexey «TWorker» Zhaliy"))
+        layout.addWidget(QLabel("Maxim «jojer» Odincov"))
+
+        # Кнопка лицензии
+        btn_license = QPushButton("Лицензия")
+        btn_license.clicked.connect(self.show_license)
+        layout.addWidget(btn_license)
+
+    def show_license(self):
+        text = """AutoFillSurnames
+
+    Required Notice: Copyright (c) 2026 TWorker and Maxim Odincov. All rights reserved.
+
+    Polyform Noncommercial License 1.0.0
+    https://polyformproject.org/licenses/noncommercial/1.0.0"""
+
+        dialog = MessageDialog(
+            self,
+            "Лицензия",
+            text,
+            buttons=[("Закрыть", "primary")]
+        )
+        self.apply_theme_to_dialog(dialog, self.current_theme)
+        dialog.exec()
 
     def change_theme(self):
         theme = "light" if self.rb_light.isChecked() else "dark"
@@ -687,14 +846,18 @@ class DiplomaGenerator(QMainWindow):
 
     def generate_all(self):
         people = self.get_names_list()
-        if not people:
-            QMessageBox.warning(self, "Нет списка", "Добавь список имён.")
-            return
-
         if not self.template_path:
             QMessageBox.warning(self, "Нет шаблона", "Выбери шаблон грамоты.")
             return
-
+        if not self.font_path and not self.selected_font_family:
+            QMessageBox.warning(self, "Нет шрифта", "Выбери файл шрифта или системный шрифт.")
+            return
+        if self.font_size_spin.value() == 0:
+            QMessageBox.warning(self, "Нет размера", "Укажи размер шрифта.")
+            return
+        if not people:
+            QMessageBox.warning(self, "Нет списка", "Добавь список имён.")
+            return
         if self.preview_check.isChecked():
             while True:
                 if not self.make_preview():
@@ -749,21 +912,23 @@ class DiplomaGenerator(QMainWindow):
                 if len(problematic) > 15:
                     msg += f"\n...и ещё {len(problematic) - 15}\n"
 
-                choice = QMessageBox.question(
+                dialog = MessageDialog(
                     self,
                     "Текст выходит за границы",
-                    msg + "\n\n«Да» — сделать все\n«Нет» — только корректные\n«Отмена» — остановить",
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                    msg,
+                    buttons=[("Сделать все", "primary"), ("Только корректные", ""), ("Отмена", "")]
                 )
+                self.apply_theme_to_dialog(dialog, self.current_theme)
+                dialog.exec()
 
-                if choice == QMessageBox.Cancel:
+                if dialog.result == 2:  # Отмена
                     self.status_label.setText("Отменено пользователем")
                     return
-                elif choice == QMessageBox.No:
+                elif dialog.result == 1:  # Только корректные
                     problematic_names = {"_".join(p[0]) for p in problematic}
                     generated_people = [p for p in people if "_".join(p) not in problematic_names]
                     self.excluded_text.setPlainText("\n".join(" ".join(p[0]) for p in problematic))
-                else:
+                else:  # Сделать все
                     generated_people = people
             else:
                 generated_people = people
@@ -810,14 +975,24 @@ class DiplomaGenerator(QMainWindow):
             self.status_label.setText(f"Готово! {count} {word} в папке «{output_dir}»")
             self.open_dir_btn.setVisible(True)
 
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Готово")
-            msg_box.setText(f"Создано {count} {word}.\nИсключено: {excluded_count}.")
-            btn_open = msg_box.addButton("Открыть папку", QMessageBox.ActionRole)
-            btn_close = msg_box.addButton("Закрыть", QMessageBox.RejectRole)
-            msg_box.exec()
+            # Текст с учётом режима PDF
+            if self.get_output_format() == "pdf" and self.get_pdf_mode() == "single":
+                pdf_filename = f"{self.pdf_name_edit.text()}.pdf"
+                word_instr = plural_instrumental(count, ("грамотой", "грамотами", "грамотами"))
+                result_text = f"Создан файл «{pdf_filename}» с {count} {word_instr}.\nИсключено: {excluded_count}."
+            else:
+                result_text = f"Создано {count} {word}.\nИсключено: {excluded_count}."
 
-            if msg_box.clickedButton() == btn_open:
+            dialog = MessageDialog(
+                self,
+                "Готово",
+                result_text,
+                buttons=[("Открыть папку", "primary"), ("Закрыть", "")]
+            )
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+
+            if dialog.result == 0:
                 self.open_output_dir()
 
         except Exception as e:

@@ -44,3 +44,15 @@ def plural(n, forms):
     elif 2 <= n <= 4:
         return forms[1]
     return forms[2]
+
+def plural_instrumental(n, forms):
+    """
+    forms = ('грамотой', 'грамотами', 'грамотами')
+    """
+    n = abs(n) % 100
+    if 11 <= n <= 19:
+        return forms[2]
+    n = n % 10
+    if n == 1:
+        return forms[0]
+    return forms[2]

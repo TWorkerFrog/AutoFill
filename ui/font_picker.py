@@ -4,13 +4,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFontDatabase, QFont
 from PySide6.QtCore import Qt
-
+from core.screen_utils import get_window_size
 
 class FontPickerDialog(QDialog):
     def __init__(self, parent=None, current_family="", current_size=48, current_style="Regular"):
         super().__init__(parent)
         self.setWindowTitle("Выбор шрифта")
-        self.resize(500, 600)
+        w, h = get_window_size(self, 0.35, 0.55)
+        self.resize(w, h)
 
         self.selected_family = current_family
         self.selected_size = current_size

@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
+from core.screen_utils import get_window_size
 
 
 class PreviewDialog(QDialog):
@@ -19,7 +20,8 @@ class PreviewDialog(QDialog):
         self.view.setRenderHint(self.view.renderHints())
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
 
-        self.resize(900, 800)
+        w, h = get_window_size(self, 0.65, 0.75)
+        self.resize(w, h)
         if parent:
             parent_center = parent.screen().availableGeometry().center()
             self.move(
