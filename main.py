@@ -1,13 +1,10 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QPropertyAnimation
 
 from core.windows_utils import set_title_bar_color, set_title_bar_light_theme
 from ui.main_window import DiplomaGenerator
 from PySide6.QtCore import QTranslator, QLibraryInfo
-from ui.result_dialog import ResultDialog
-from ui.message_dialog import MessageDialog
 from core.screen_utils import center_window
 
 if __name__ == "__main__":

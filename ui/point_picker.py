@@ -6,8 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImage, QColor, QPen, QBrush
 from PIL import Image
-from core.screen_utils import get_window_size, center_window
-from core.font_utils import scan_fonts
+from core.screen_utils import get_window_size
 
 
 class PointPickerDialog(QDialog):
@@ -16,9 +15,6 @@ class PointPickerDialog(QDialog):
         self.setWindowTitle("Укажи точку")
 
         self.align = align
-
-        self.fonts_data = scan_fonts()
-        self.base_families = sorted(self.fonts_data.keys())
 
         self.image_path = image_path
         self.pil_image = Image.open(image_path)
@@ -233,13 +229,4 @@ class PointPickerDialog(QDialog):
     def get_point(self):
         return self.marker_x, self.marker_y
 
-    def update_styles(self):
-        current_item = self.font_list.currentItem()
-        if not current_item:
-            return
 
-        family = current_item.text()
-        styles = self.fonts_data.get(family, {})
-
-        self.style_combo.clear()
-        self.style_combo.addItems(styles.keys())

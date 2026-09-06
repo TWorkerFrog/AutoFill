@@ -1,14 +1,11 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
-)
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView, QGraphicsScene, \
+    QGraphicsPixmapItem
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
-from core.screen_utils import get_window_size
+from PySide6.QtGui import QPixmap, QImage
 
 
 class PreviewDialog(QDialog):
-    def __init__(self, image_path, parent=None):
+    def __init__(self, pil_image, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Предпросмотр")
 
@@ -20,26 +17,21 @@ class PreviewDialog(QDialog):
         self.view.setRenderHint(self.view.renderHints())
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
 
-        w, h = get_window_size(self, 0.65, 0.75)
-        self.resize(w, h)
-        if parent:
-            parent_center = parent.screen().availableGeometry().center()
-            self.move(
-                parent_center.x() - self.width() // 2,
-                parent_center.y() - self.height() // 2
-            )
+        # Конвертируем PIL Image в QPixmap
+        pil_rgb = pil_image.convert("RGB")
+        data = pil_rgb.tobytes("raw", "RGB")
+        qimage = QImage(data, pil_image.width, pil_image.height, pil_image.width * 3, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(qimage)
 
-        pixmap = QPixmap(image_path)
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(self.pixmap_item)
 
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
 
-        self.view.wheelEvent = self.on_wheel
-
         layout.addWidget(self.view)
 
+        # Кнопки зума
         zoom_layout = QHBoxLayout()
         btn_in = QPushButton("+")
         btn_in.setFixedWidth(40)
@@ -57,6 +49,7 @@ class PreviewDialog(QDialog):
         zoom_layout.addStretch()
         layout.addLayout(zoom_layout)
 
+        # Кнопки
         btn_layout = QHBoxLayout()
 
         self.continue_btn = QPushButton("Продолжить генерацию")
@@ -72,7 +65,6 @@ class PreviewDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
 
-        # Центрируем относительно родителя
         layout.addLayout(btn_layout)
 
     def zoom_in(self):
