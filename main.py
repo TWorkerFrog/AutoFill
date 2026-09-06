@@ -2,6 +2,8 @@ import sys
 import os
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QPropertyAnimation
+
+from core.windows_utils import set_title_bar_color, set_title_bar_light_theme
 from ui.main_window import DiplomaGenerator
 from PySide6.QtCore import QTranslator, QLibraryInfo
 from ui.result_dialog import ResultDialog
@@ -21,7 +23,10 @@ if __name__ == "__main__":
         with open(style_path, "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
 
+
     window = DiplomaGenerator()
     window.show()
+    set_title_bar_color(window, "#222222")
+    set_title_bar_light_theme(window, False)
     center_window(window)
     sys.exit(app.exec())

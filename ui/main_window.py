@@ -17,6 +17,8 @@ from core.name_format import format_name_lines, resolve_auto_lines, plural
 from core.name_format import plural_instrumental
 from core.screen_utils import get_window_size
 from core.font_utils import scan_fonts
+from core.windows_utils import set_title_bar_color, set_title_bar_light_theme, is_windows_theme
+
 from ui.point_picker import PointPickerDialog
 from ui.preview import PreviewDialog
 from ui.font_picker import FontPickerDialog
@@ -46,6 +48,10 @@ class DiplomaGenerator(QMainWindow):
 
         self.create_ui()
 
+        if is_windows_theme():
+            self.rb_dark.setChecked(True)
+        else:
+            self.rb_light.setChecked(True)
 
     def create_ui(self):
         central = QWidget()
@@ -90,6 +96,7 @@ class DiplomaGenerator(QMainWindow):
         self.open_dir_btn.setVisible(False)
         self.open_dir_btn.clicked.connect(self.open_output_dir)
         bottom_layout.addWidget(self.open_dir_btn)
+
 
         main_layout.addLayout(bottom_layout)
 
@@ -176,7 +183,9 @@ class DiplomaGenerator(QMainWindow):
         row1 = QHBoxLayout()
         row1.addWidget(QLabel("Шаблон грамоты:"))
         self.template_edit = QLineEdit()
-        row1.addWidget(self.template_edit)
+        self.template_edit.setPlaceholderText("Путь до файла с грамотой...")
+        self.template_edit.setMinimumWidth(250)
+        row1.addWidget(self.template_edit, stretch=1)
         btn_template = QPushButton("Выбрать")
         btn_template.clicked.connect(self.choose_template)
         row1.addWidget(btn_template)
@@ -197,7 +206,6 @@ class DiplomaGenerator(QMainWindow):
         btn_font_file = QPushButton("Файл")
         btn_font_file.clicked.connect(self.choose_font_file)
         row2.addWidget(btn_font_file)
-
         layout.addLayout(row2)
 
         self.font_db = QFontDatabase()
@@ -342,12 +350,40 @@ class DiplomaGenerator(QMainWindow):
 
     def load_names_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Выбери файл со списком", "", "Текст (*.txt)")
-        if path:
-            with open(path, encoding="utf-8") as f:
-                content = f.read()
-            self.all_names = content
-            self.names_text.setPlainText(content)
-            self.search_edit.clear()
+        if not path:
+            return
+
+        with open(path, encoding="utf-8") as f:
+            new_content = f.read()
+
+        current = self.names_text.toPlainText().strip()
+
+        if current:
+            dialog = MessageDialog(
+                self,
+                "Загрузка списка",
+                "Текущий список не пуст. Что сделать?",
+                buttons=[
+                    ("Заменить", "primary"),
+                    ("Добавить в конец", ""),
+                    ("Отмена", "")
+                ]
+            )
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+
+            if dialog.result == 0:  # Заменить
+                self.all_names = new_content
+                self.names_text.setPlainText(new_content)
+            elif dialog.result == 1:  # Добавить
+                self.all_names = current + "\n" + new_content
+                self.names_text.setPlainText(self.all_names)
+            # Отмена — ничего не делаем
+        else:
+            self.all_names = new_content
+            self.names_text.setPlainText(new_content)
+
+        self.search_edit.clear()
 
     def get_names_list(self):
         text = self.all_names if self.all_names else self.names_text.toPlainText()
@@ -457,6 +493,13 @@ class DiplomaGenerator(QMainWindow):
             widget.style().polish(widget)
         dialog.style().unpolish(dialog)
         dialog.style().polish(dialog)
+
+        if theme == "dark":
+            set_title_bar_color(dialog, "#222222")
+            set_title_bar_light_theme(dialog, False)
+        else:
+            set_title_bar_color(dialog, "#F2F2F2")
+            set_title_bar_light_theme(dialog, True)
 
     def is_person_in_list(self, person_parts, people_list):
         """Проверяет, есть ли человек в списке."""
@@ -811,6 +854,13 @@ class DiplomaGenerator(QMainWindow):
             widget.style().unpolish(widget)
             widget.style().polish(widget)
 
+        if theme == "dark":
+            set_title_bar_color(self, "#222222")
+            set_title_bar_light_theme(self, False)
+        else:
+            set_title_bar_color(self, "#F2F2F2")
+            set_title_bar_light_theme(self, True)
+
         self.setProperty("theme", theme)
         self.style().unpolish(self)
         self.style().polish(self)
@@ -949,6 +999,72 @@ class DiplomaGenerator(QMainWindow):
         if not people:
             QMessageBox.warning(self, "Нет списка", "Добавь список имён.")
             return
+
+        # Проверка дубликатов
+        seen = {}
+        duplicates = []
+        for parts in people:
+            key = "_".join(parts)
+            if key in seen:
+                duplicates.append(parts)
+            else:
+                seen[key] = True
+
+        if duplicates:
+            msg = f"Найдены дубликаты ({len(duplicates)}):\n\n"
+            for dup in duplicates[:15]:
+                msg += f"• {' '.join(dup)}\n"
+            if len(duplicates) > 15:
+                msg += f"\n...и ещё {len(duplicates) - 15}\n"
+
+            dialog = MessageDialog(
+                self,
+                "Дубликаты в списке",
+                msg,
+                buttons=[
+                    ("Продолжить", "primary"),
+                    ("Удалить дубликаты", ""),
+                    ("Отмена", "")
+                ]
+            )
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+
+            if dialog.result == 2:  # Отмена
+                self.status_label.setText("Отменено пользователем")
+                return
+            elif dialog.result == 1:  # Удалить дубликаты
+                dup_keys = {"_".join(d) for d in duplicates}
+                people = [p for p in people if "_".join(p) not in dup_keys]
+                # Обновляем names_text
+                self.names_text.setPlainText("\n".join(" ".join(p) for p in people))
+                self.all_names = "\n".join(" ".join(p) for p in people)
+
+        # Вопрос про очистку папки
+        if os.path.exists(self.output_dir_edit.text() or "Грамоты"):
+            dialog = MessageDialog(
+                self,
+                "Очистка папки",
+                f"Очистить папку «{self.output_dir_edit.text() or 'Грамоты'}» перед генерацией?",
+                buttons=[
+                    ("Очистить", "primary"),
+                    ("Не очищать", ""),
+                    ("Отмена", "")
+                ]
+            )
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+
+            if dialog.result == 2:
+                self.status_label.setText("Отменено пользователем")
+                return
+            elif dialog.result == 0:
+                output_dir = self.output_dir_edit.text() or "Грамоты"
+                for file in os.listdir(output_dir):
+                    file_path = os.path.join(output_dir, file)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+
         if self.preview_check.isChecked():
             while True:
                 if not self.make_preview():
@@ -956,14 +1072,13 @@ class DiplomaGenerator(QMainWindow):
 
                 result = self.show_preview_dialog()
 
-                if result == 0:  # Отмена
+                if result == 0:
                     self.status_label.setText("Отменено пользователем")
                     return
-                elif result == 2:  # Редактировать позицию
+                elif result == 2:
                     self.pick_position()
-                    # После выбора точки — снова показываем превью
                     continue
-                else:  # Продолжить (accept)
+                else:
                     break
 
         try:
@@ -977,13 +1092,31 @@ class DiplomaGenerator(QMainWindow):
             output_dir = self.output_dir_edit.text() or "Грамоты"
             os.makedirs(output_dir, exist_ok=True)
 
+            # Для single PDF — проверяем только общий файл
+            if self.get_output_format() == "pdf" and self.get_pdf_mode() == "single":
+                pdf_filename = f"{self.pdf_name_edit.text()}.pdf"
+                pdf_path = os.path.join(output_dir, pdf_filename)
+                if os.path.exists(pdf_path):
+                    dialog = MessageDialog(
+                        self,
+                        "Файл существует",
+                        f"Файл «{pdf_filename}» уже существует.\nЗаменить?",
+                        buttons=[("Заменить", "primary"), ("Отмена", "")]
+                    )
+                    self.apply_theme_to_dialog(dialog, self.current_theme)
+                    dialog.exec()
+                    if dialog.result == 1:
+                        self.status_label.setText("Отменено пользователем")
+                        return
+
             problematic = []
             people_lines = {}
 
             for parts in people:
                 lines = format_name_lines(parts, self.get_name_mode(), self.split_after_spin.value())
                 if lines is None:
-                    lines = resolve_auto_lines(parts, font, self.letter_spacing_spin.value(), img_w, self.margin_spin.value())
+                    lines = resolve_auto_lines(parts, font, self.letter_spacing_spin.value(), img_w,
+                                               self.margin_spin.value())
                 people_lines["_".join(parts)] = lines
 
                 problems = check_text_bounds(
@@ -1012,26 +1145,30 @@ class DiplomaGenerator(QMainWindow):
                 self.apply_theme_to_dialog(dialog, self.current_theme)
                 dialog.exec()
 
-                if dialog.result == 2:  # Отмена
+                if dialog.result == 2:
                     self.status_label.setText("Отменено пользователем")
                     return
-                elif dialog.result == 1:  # Только корректные
+                elif dialog.result == 1:
                     problematic_names = {"_".join(p[0]) for p in problematic}
                     generated_people = [p for p in people if "_".join(p) not in problematic_names]
                     self.excluded_text.setPlainText("\n".join(" ".join(p[0]) for p in problematic))
-                else:  # Сделать все
+                else:
                     generated_people = people
             else:
                 generated_people = people
 
             pdf_pages = [] if (self.get_output_format() == "pdf" and self.get_pdf_mode() == "single") else None
 
+            # Для single PDF — не проверяем каждый файл
+            skip_individual_check = (self.get_output_format() == "pdf" and self.get_pdf_mode() == "single")
+
             for idx, parts in enumerate(generated_people, 1):
                 lines = people_lines.get("_".join(parts))
                 if lines is None:
                     lines = format_name_lines(parts, self.get_name_mode(), self.split_after_spin.value())
                     if lines is None:
-                        lines = resolve_auto_lines(parts, font, self.letter_spacing_spin.value(), img_w, self.margin_spin.value())
+                        lines = resolve_auto_lines(parts, font, self.letter_spacing_spin.value(), img_w,
+                                                   self.margin_spin.value())
 
                 img = template.copy()
                 d = ImageDraw.Draw(img)
@@ -1043,7 +1180,35 @@ class DiplomaGenerator(QMainWindow):
                     img_w, img_h
                 )
 
-                filename = "_".join(parts)
+                if not skip_individual_check:
+                    filename = "_".join(parts)
+                    ext = ".pdf" if self.get_output_format() == "pdf" else ".png"
+                    base_path = os.path.join(output_dir, filename + ext)
+
+                    if os.path.exists(base_path):
+                        dialog = MessageDialog(
+                            self,
+                            "Файл существует",
+                            f"Файл «{filename}{ext}» уже существует.\nЧто сделать?",
+                            buttons=[
+                                ("Заменить", "primary"),
+                                ("Создать с номером", ""),
+                                ("Отмена", "")
+                            ]
+                        )
+                        self.apply_theme_to_dialog(dialog, self.current_theme)
+                        dialog.exec()
+
+                        if dialog.result == 2:
+                            continue
+                        elif dialog.result == 1:
+                            counter = 1
+                            while os.path.exists(os.path.join(output_dir, f"{filename}_{counter}{ext}")):
+                                counter += 1
+                            filename = f"{filename}_{counter}"
+                else:
+                    filename = "_".join(parts)
+
                 if self.get_output_format() == "pdf":
                     if pdf_pages is not None:
                         pdf_pages.append(img.convert("RGB"))
@@ -1058,7 +1223,6 @@ class DiplomaGenerator(QMainWindow):
                 pdf_path = os.path.join(output_dir, f"{self.pdf_name_edit.text()}.pdf")
                 pdf_pages[0].save(pdf_path, "PDF", resolution=100.0, save_all=True, append_images=pdf_pages[1:])
 
-            # Финальное сообщение
             count = len(generated_people)
             word = plural(count, ("грамота", "грамоты", "грамот"))
             excluded_count = len(problematic)
@@ -1066,7 +1230,6 @@ class DiplomaGenerator(QMainWindow):
             self.status_label.setText(f"Готово! {count} {word} в папке «{output_dir}»")
             self.open_dir_btn.setVisible(True)
 
-            # Текст с учётом режима PDF
             if self.get_output_format() == "pdf" and self.get_pdf_mode() == "single":
                 pdf_filename = f"{self.pdf_name_edit.text()}.pdf"
                 word_instr = plural_instrumental(count, ("грамотой", "грамотами", "грамотами"))

@@ -91,6 +91,7 @@ QCheckBox::indicator {
 QCheckBox::indicator:checked {
     background-color: #7F43E3;
     border-color: #3A3A3A;
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/check.svg");
 }
 
 QRadioButton::indicator {
@@ -102,7 +103,8 @@ QRadioButton::indicator {
 }
 
 QRadioButton::indicator:checked {
-    background-color: #7F43E3;
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/radio-checked.svg");
+    background-color: #2A2A2A;
     border-color: #3A3A3A;
 }
 
@@ -115,22 +117,22 @@ QDialog {
 }
 
 QSpinBox::up-button{
-    image: url("icons/BlackTheme/arrow-up.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-up.svg");
     width: 20px;
     border-radius: 3px;
 }
 QSpinBox::down-button{
-    image: url("icons/BlackTheme/arrow-down.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-down.svg");
     width: 20px;
     border-radius: 3px;
 }
 
 QSpinBox::up-button:hover {
-    image: url("icons/BlackTheme/arrow-up-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-up-hover.svg");
 }
 
 QSpinBox::down-button:hover{
-    image: url("icons/BlackTheme/arrow-down-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-down-hover.svg");
     width: 20px;
     border-radius: 3px;
 }
@@ -153,13 +155,53 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    image: url("icons/BlackTheme/arrow-down.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-down.svg");
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     padding-right: 10px;
 }
 QComboBox::down-arrow:hover {
-    image: url("icons/BlackTheme/arrow-down-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/BlackTheme/arrow-down-hover.svg");
+}
+
+QScrollBar:vertical {
+    background-color: #2A2A2A;
+    width: 10px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #4A4A4A;
+    border-radius: 5px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #7F43E3;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background-color: #2A2A2A;
+    height: 10px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #4A4A4A;
+    border-radius: 5px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #7F43E3;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
 }
 
 /* ============================================
@@ -238,6 +280,7 @@ QCheckBox[theme="light"]::indicator {
 QCheckBox[theme="light"]::indicator:checked {
     background-color: #7F43E3;
     border-color: #CCCCCC;
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/check.svg");
 }
 
 QRadioButton[theme="light"]::indicator {
@@ -249,7 +292,8 @@ QRadioButton[theme="light"]::indicator {
 }
 
 QRadioButton[theme="light"]::indicator:checked {
-    background-color: #7F43E3;
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/radio-checked.svg");
+    background-color: #F2F2F2;
     border-color: #CCCCCC;
 }
 
@@ -262,22 +306,22 @@ QDialog[theme="light"] {
 }
 
 QSpinBox[theme="light"]::up-button{
-    image: url("icons/LightTheme/arrow-up.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-up.svg");
     width: 20px;
     border-radius: 3px;
 }
 QSpinBox[theme="light"]::down-button{
-    image: url("icons/LightTheme/arrow-down.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-down.svg");
     width: 20px;
     border-radius: 3px;
 }
 
 QSpinBox[theme="light"]::up-button:hover {
-    image: url("icons/LightTheme/arrow-up-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-up-hover.svg");
 }
 
 QSpinBox[theme="light"]::down-button:hover{
-    image: url("icons/LightTheme/arrow-down-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-down-hover.svg");
     width: 20px;
     border-radius: 3px;
 }
@@ -300,11 +344,11 @@ QComboBox[theme="light"]::drop-down {
 }
 
 QComboBox[theme="light"]::down-arrow {
-    image: url("icons/LightTheme/arrow-down.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-down.svg");
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     padding-right: 10px;
 }
 QComboBox[theme="light"]::down-arrow:hover {
-    image: url("icons/LightTheme/arrow-down-hover.svg");
+    image: url("C:/Users/Alex/Documents/GitHub/AutoFillSurnames/icons/LightTheme/arrow-down-hover.svg");
 }
