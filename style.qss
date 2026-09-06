@@ -221,6 +221,10 @@ QListView::item:selected {
     color: #F2F2F2;
 }
 
+QHBoxLayout {
+    spacing: 5px;
+}
+
 /* ============================================
    СВЕТЛАЯ ТЕМА
    ============================================ */
@@ -408,4 +412,8 @@ QListView[theme="light"]::item:hover {
 QListView[theme="light"]::item:selected {
     background-color: #7F43E3;
     color: #F2F2F2;
+}
+
+QHBoxLayout[theme="light"] {
+    spacing: 5px;
 }

@@ -21,13 +21,17 @@ class PointPickerDialog(QDialog):
         self.img_width = self.pil_image.width
         self.img_height = self.pil_image.height
 
-        if initial_x is not None and initial_y is not None:
+        if initial_x and initial_y:
             self.marker_x = initial_x
             self.marker_y = initial_y
         else:
             self.marker_x = self.img_width // 2
             self.marker_y = self.img_height // 2
 
+        print(f"initial_x: {initial_x}")
+        print(f"initial_y: {initial_y}")
+        print(f"marker_x: {self.marker_x}")
+        print(f"marker_y: {self.marker_y}")
         self.pil_image_rgb = self.pil_image.convert("RGB")
         data = self.pil_image_rgb.tobytes("raw", "RGB")
         qimage = QImage(data, self.img_width, self.img_height, self.img_width * 3, QImage.Format_RGB888)
@@ -55,8 +59,8 @@ class PointPickerDialog(QDialog):
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
 
-        pen = QPen(QColor(255, 0, 0, 100))
-        pen.setWidth(1)
+        pen = QPen(QColor(255, 0, 0, 125))
+        pen.setWidth(2)
         pen.setStyle(Qt.DashLine)
 
         line_v = QGraphicsLineItem(self.img_width // 2, 0, self.img_width // 2, self.img_height)
@@ -141,9 +145,7 @@ class PointPickerDialog(QDialog):
             return
         self.draw_marker()
 
-    def fit_to_view(self):
-        self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
-        self.scale_factor = self.view.transform().m11()
+
 
     def zoom_in(self):
         self.zoom_at_cursor(1.2)
@@ -172,6 +174,10 @@ class PointPickerDialog(QDialog):
         h_bar.setValue(h_bar.value() + delta.x())
         v_bar.setValue(v_bar.value() + delta.y())
 
+    def fit_to_view(self):
+        self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+        self.scale_factor = self.view.transform().m11()
+
     def on_wheel(self, event):
         if event.angleDelta().y() > 0:
             self.zoom_at_cursor(1.2)
@@ -183,7 +189,7 @@ class PointPickerDialog(QDialog):
             self.scene.removeItem(item)
         self.marker_lines.clear()
 
-        size = 14
+        size = 20
 
         line1 = QGraphicsLineItem(self.marker_x - size, self.marker_y, self.marker_x + size, self.marker_y)
         line1.setPen(self.marker_pen)
@@ -195,7 +201,7 @@ class PointPickerDialog(QDialog):
         self.scene.addItem(line2)
         self.marker_lines.append(line2)
 
-        dot = QGraphicsEllipseItem(self.marker_x - 2, self.marker_y - 2, 4, 4)
+        dot = QGraphicsEllipseItem(self.marker_x - 3, self.marker_y - 3, 6, 6)
         dot.setPen(self.marker_pen)
         dot.setBrush(QBrush(QColor(255, 0, 0)))
         self.scene.addItem(dot)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QButtonGroup, QFileDialog, QColorDialog, QMessageBox,
     QTabWidget, QSpinBox, QDialog, QSplitter, QCompleter, QComboBox
 )
-from PySide6.QtGui import QDesktopServices, QFontDatabase
+from PySide6.QtGui import QDesktopServices, QFontDatabase, QIntValidator
 from PySide6.QtWidgets import QFrame
 from PIL import Image, ImageDraw
 
@@ -42,8 +42,15 @@ class DiplomaGenerator(QMainWindow):
         self.current_theme = "dark"
         self.all_names = ""
         self.all_excluded = ""
+        self.filter_state = {
+            "all_names": {"is_filtering": False, "indices": []},
+            "all_excluded": {"is_filtering": False, "indices": []},
+        }
         self.selected_font_style = "Regular"
         self.fonts_data = scan_fonts()
+        self.all_names_list = []  # Полный список строк
+        self.filtered_indices = []  # Индексы отфильтрованных
+        self.is_filtering = False
 
         self.create_ui()
 
@@ -210,6 +217,7 @@ class DiplomaGenerator(QMainWindow):
         self.template_edit = QLineEdit()
         self.template_edit.setPlaceholderText("Путь до файла с грамотой...")
         self.template_edit.setMinimumWidth(250)
+        self.template_edit.textChanged.connect(self.on_template_changed)
         row1.addWidget(self.template_edit, stretch=1)
         btn_template = QPushButton("Выбрать")
         btn_template.clicked.connect(self.choose_template)
@@ -219,14 +227,17 @@ class DiplomaGenerator(QMainWindow):
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Шрифт:"))
         self.font_edit = QLineEdit()
-        self.font_edit.setPlaceholderText("Начни вводить название...")
+        self.font_edit.setPlaceholderText("Введите название шрифта...")
         self.font_edit.setMinimumWidth(250)  # ← минимальная ширина
         row2.addWidget(self.font_edit, stretch=1)  # ← растягивается
         self.style_combo = QComboBox()
         self.style_combo.setFixedWidth(150)
         row2.addWidget(self.style_combo)
         self.style_combo.currentTextChanged.connect(self.on_style_changed)
-
+        self.font_edit.textChanged.connect(self.on_font_changed)
+        self.font_edit.returnPressed.connect(self.normalize_font_input)
+        self.font_edit.editingFinished.connect(self.normalize_font_input)
+        self.style_combo.currentTextChanged.connect(self.on_style_changed)
         # Файл
         btn_font_file = QPushButton("Файл")
         btn_font_file.clicked.connect(self.choose_font_file)
@@ -245,25 +256,51 @@ class DiplomaGenerator(QMainWindow):
         # При выборе шрифта обновляем начертания
         self.font_edit.textChanged.connect(self.on_font_changed)
 
-
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Размер:"))
+
+        # Блок: Размер шрифта
+        size_widget = QWidget()
+        size_layout = QHBoxLayout(size_widget)
+        size_layout.setContentsMargins(0, 0, 0, 0)
+        size_layout.addWidget(QLabel("Размер шрифта (px):"))
         self.font_size_spin = QSpinBox()
-        self.font_size_spin.setSpecialValueText(" ")
-        self.font_size_spin.setRange(0, 500)
+        self.font_size_spin.setRange(0, 1000)
         self.font_size_spin.setValue(0)
-        row3.addWidget(self.font_size_spin)
+        size_layout.addWidget(self.font_size_spin)
+        row3.addWidget(size_widget)
 
-        row3.addWidget(QLabel("Цвет:"))
-        self.color_btn = QPushButton("Выбрать")
-        self.color_btn.clicked.connect(self.choose_color)
-        row3.addWidget(self.color_btn)
+        # Отступ между блоками
+        row3.addStretch()
 
-        row3.addWidget(QLabel("Межбуквенный:"))
+        # Блок: Цвет
+        color_widget = QWidget()
+        color_layout = QHBoxLayout(color_widget)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.addWidget(QLabel("Цвет текста:"))
+        #self.color_btn = QPushButton("Выбрать")
+        #self.color_btn.clicked.connect(self.choose_color)
+        #color_layout.addWidget(self.color_btn)
+        row3.addWidget(color_widget)
+        self.color_preview = QPushButton()
+        self.color_preview.clicked.connect(self.choose_color)
+        self.color_preview.setFixedSize(30, 30)
+        self.color_preview.setStyleSheet("background-color: #000000; border-radius: 4px;")
+        row3.addWidget(self.color_preview)
+
+        # Отступ
+        row3.addStretch()
+
+        # Блок: Межбуквенный
+        spacing_widget = QWidget()
+        spacing_layout = QHBoxLayout(spacing_widget)
+        spacing_layout.setContentsMargins(0, 0, 0, 0)
+        spacing_layout.addWidget(QLabel("Межбуквенный интервал (px):"))
         self.letter_spacing_spin = QSpinBox()
         self.letter_spacing_spin.setRange(0, 50)
         self.letter_spacing_spin.setValue(0)
-        row3.addWidget(self.letter_spacing_spin)
+        spacing_layout.addWidget(self.letter_spacing_spin)
+        row3.addWidget(spacing_widget)
+
         layout.addLayout(row3)
 
         # Подпись + поле + кнопки для основного списка
@@ -281,10 +318,10 @@ class DiplomaGenerator(QMainWindow):
 
         self.names_text = QTextEdit()
         self.names_text.setPlaceholderText("Иванов Иван Иванович\nПетров Пётр Петрович\n...")
-        self.names_text.textChanged.connect(
-            lambda: self.update_all_data(self.search_edit, self.names_text, "all_names")
-        )
+        self.names_text.textChanged.connect(self.on_text_edited)
         names_layout.addWidget(self.names_text)
+
+
 
         # Кнопки
         btn_row1 = QHBoxLayout()
@@ -310,11 +347,8 @@ class DiplomaGenerator(QMainWindow):
 
         self.excluded_text = QTextEdit()
         self.excluded_text.setPlaceholderText("Сюда попадут ФИО, которые не влезли в границы")
-        self.excluded_text.textChanged.connect(
-            lambda: self.update_all_data(self.excluded_search_edit, self.excluded_text, "all_excluded")
-        )
+        self.excluded_text.textChanged.connect(self.on_text_edited)
         excluded_layout.addWidget(self.excluded_text)
-
         # Кнопки
         btn_row2 = QHBoxLayout()
         btn_clear_excl = QPushButton("Очистить исключения")
@@ -326,7 +360,7 @@ class DiplomaGenerator(QMainWindow):
         excluded_layout.addLayout(btn_row2)
 
         self.ask_before_move = QCheckBox("Спрашивать перед переносом исключений")
-        self.ask_before_move.setChecked(False)
+        self.ask_before_move.setChecked(True)
         excluded_layout.addWidget(self.ask_before_move)
 
         # Сплиттер
@@ -371,7 +405,7 @@ class DiplomaGenerator(QMainWindow):
         color = QColorDialog.getColor()
         if color.isValid():
             self.text_color = (color.red(), color.green(), color.blue())
-            self.color_btn.setStyleSheet(f"QPushButton {{ background-color: {color.name()}; }}")
+            self.color_preview.setStyleSheet(f"background-color: {color.name()}; border-radius: 4px;")
 
     def load_names_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Выбери файл со списком", "", "Текст (*.txt)")
@@ -467,47 +501,166 @@ class DiplomaGenerator(QMainWindow):
             self.all_names = self.names_text.toPlainText()
 
     def filter_list(self, search_edit, text_edit, all_data_attr):
-        """Универсальный фильтр для списков."""
         search_text = search_edit.text().strip().lower()
-        all_data = getattr(self, all_data_attr)
+        all_data = getattr(self, all_data_attr, "")
 
         if not search_text:
-            if all_data:
-                text_edit.setPlainText(all_data)
+            # Очистка фильтра
+            self.is_filtering = False
+            self.filtered_indices = []
+            text_edit.blockSignals(True)
+            text_edit.setPlainText(all_data)
+            text_edit.blockSignals(False)
             return
 
         if not all_data:
             all_data = text_edit.toPlainText()
             setattr(self, all_data_attr, all_data)
 
-        lines = all_data.split("\n")
-        filtered = [line for line in lines if search_text in line.lower()]
+        self.is_filtering = True
+        all_lines = all_data.split("\n")
+
+        self.filtered_indices = [
+            i for i, line in enumerate(all_lines)
+            if search_text in line.lower()
+        ]
+
+        filtered = [all_lines[i] for i in self.filtered_indices]
+
+        text_edit.blockSignals(True)
         text_edit.setPlainText("\n".join(filtered))
+        text_edit.blockSignals(False)
 
-    def update_all_data(self, search_edit, text_edit, all_data_attr):
-        search_text = search_edit.text().strip()
+    def on_text_edited(self):
+        """Обработчик изменения текста пользователем."""
+        if self.names_text.signalsBlocked():
+            return
 
-        if not search_text:
-            # Если поиск пуст — сохраняем как есть
-            setattr(self, all_data_attr, text_edit.toPlainText())
+        current_lines = self.names_text.toPlainText().split("\n")
+
+        if self.is_filtering:
+            # Режим фильтрации
+            all_lines = self.all_names.split("\n")
+
+            if len(current_lines) == len(self.filtered_indices):
+                # Только редактирование
+                for idx, new_line in zip(self.filtered_indices, current_lines):
+                    all_lines[idx] = new_line
+            else:
+                # Добавление или удаление
+                old_filtered = [all_lines[i] for i in self.filtered_indices]
+
+                if len(current_lines) > len(self.filtered_indices):
+                    # Добавлены строки
+                    added = [l for l in current_lines if l not in old_filtered]
+                    all_lines.extend(added)
+                elif len(current_lines) < len(self.filtered_indices):
+                    # Удалены строки
+                    removed = [l for l in old_filtered if l not in current_lines]
+                    indices_to_remove = []
+                    for i, line in enumerate(all_lines):
+                        if line in removed:
+                            indices_to_remove.append(i)
+
+                    indices_to_remove.sort(reverse=True)
+                    for idx in indices_to_remove:
+                        del all_lines[idx]
+
+                # Обновляем содержимое
+                for idx, new_line in zip(self.filtered_indices, current_lines):
+                    if idx < len(all_lines):
+                        all_lines[idx] = new_line
+
+            self.all_names = "\n".join(all_lines)
         else:
-            # Если поиск активен — обновляем all_data с учётом изменений
+            # Без фильтра
+            self.all_names = "\n".join(current_lines)
+
+    def update_filtered_buffer(self, text_edit):
+        """Обновляет буфер при редактировании."""
+        if not self.filtered_indices:
+            return
+
+        current_lines = text_edit.toPlainText().split("\n")
+
+        for i, idx in enumerate(self.filtered_indices):
+            if i < len(current_lines):
+                self.filtered_buffer[i] = (idx, current_lines[i])
+
+    def on_search_text_changed(self, text, search_edit, text_edit, all_data_attr):
+        print(f"=== on_search_text_changed ===")
+        print(f"text: '{text}'")
+
+        if not text.strip():
+            # Поиск очищен
             all_data = getattr(self, all_data_attr, "")
-            if not all_data:
-                return
+            current_text = text_edit.toPlainText()
 
-            # Получаем отфильтрованные строки (которые сейчас в text_edit)
-            visible_lines = text_edit.toPlainText().split("\n")
-            visible_set = set(line.strip() for line in visible_lines if line.strip())
+            # Если current_text — это отфильтрованный список (одна строка),
+            # а all_data — полный, то надо слить
+            if all_data and current_text:
+                all_lines = all_data.split("\n")
+                current_lines = current_text.split("\n")
+                current_stripped = [line.strip() for line in current_lines if line.strip()]
 
-            # Обновляем all_data: убираем удалённые, оставляем всё остальное
+                updated = []
+                current_idx = 0
+
+                for line in all_lines:
+                    stripped = line.strip()
+
+                    # Проверяем: была ли эта строка видима в фильтре?
+                    if current_idx < len(current_stripped) and stripped == current_stripped[current_idx]:
+                        # Строка видима — берём из current (возможно изменена)
+                        updated.append(current_lines[current_idx])
+                        current_idx += 1
+                    else:
+                        # Не видима — оставляем как есть
+                        updated.append(line)
+
+                # Добавляем оставшиеся новые строки
+                while current_idx < len(current_lines):
+                    if current_lines[current_idx].strip():
+                        updated.append(current_lines[current_idx].strip())
+                    current_idx += 1
+
+                final = "\n".join(updated)
+                setattr(self, all_data_attr, final)
+                text_edit.blockSignals(True)
+                text_edit.setPlainText(final)
+                text_edit.blockSignals(False)
+            else:
+                setattr(self, all_data_attr, current_text)
+        else:
+            self.filter_list(search_edit, text_edit, all_data_attr)
+
+    def save_on_search_finish(self, search_edit, text_edit, all_data_attr):
+        search_text = search_edit.text().strip()
+        all_data = getattr(self, all_data_attr, "")
+
+        if not search_text and all_data:
+            # Сохраняем изменения
             all_lines = all_data.split("\n")
-            updated_lines = []
-            for line in all_lines:
-                if line.strip() in visible_set or search_text.lower() not in line.lower():
-                    updated_lines.append(line)
+            current_lines = text_edit.toPlainText().split("\n")
 
-            setattr(self, all_data_attr, "\n".join(updated_lines))
+            # Заменяем строки, которые были в фильтре
+            result = []
+            for line in all_lines:
+                if search_text.lower() in line.lower():
+                    # Эта строка была видима — берём из current
+                    if current_lines:
+                        result.append(current_lines.pop(0).strip())
+                else:
+                    result.append(line)
+
+            # Добавляем оставшиеся
+            result.extend([l.strip() for l in current_lines if l.strip()])
+
+            final = "\n".join(result)
+            setattr(self, all_data_attr, final)
+            text_edit.blockSignals(True)
+            text_edit.setPlainText(final)
+            text_edit.blockSignals(False)
 
     def apply_theme_to_dialog(self, dialog, theme):
         """Применяет тему к диалогу и всем его дочерним виджетам."""
@@ -567,6 +720,10 @@ class DiplomaGenerator(QMainWindow):
             popup.setProperty("theme", self.current_theme)
             popup.style().unpolish(popup)
             popup.style().polish(popup)
+
+    def on_template_changed(self):
+        self.template_path = self.template_edit.text().strip()
+
     # ============================================================
     # ВКЛАДКА: ПОЗИЦИЯ
     # ============================================================
@@ -586,40 +743,82 @@ class DiplomaGenerator(QMainWindow):
         row1.addWidget(self.rb_center)
         layout.addLayout(row1)
 
+
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("X:"))
-        self.x_edit = QLineEdit("732")
-        row2.addWidget(self.x_edit)
+        x_edit = QWidget()
+        x_edit_layout = QHBoxLayout(x_edit)
+        x_edit_layout.setContentsMargins(0, 0, 0, 0)
+        x_edit_layout.addWidget(QLabel("X (px):"))
+        self.x_edit = QSpinBox()
+        self.x_edit.setRange(0, 100000)
+        self.x_edit.setSpecialValueText("—")
+
+        row2.addWidget(x_edit)
+        x_edit_layout.addWidget(self.x_edit)
         self.x_auto_check = QCheckBox("Автоцентр по X")
         row2.addWidget(self.x_auto_check)
+        row2.addStretch()
         layout.addLayout(row2)
 
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Y:"))
-        self.y_edit = QLineEdit("828")
-        row3.addWidget(self.y_edit)
+        y_edit = QWidget()
+        y_edit_layout = QHBoxLayout(y_edit)
+        y_edit_layout.setContentsMargins(0, 0, 0, 0)
+        y_edit_layout.addWidget(QLabel("Y (px):"))
+        self.y_edit = QSpinBox()
+        self.y_edit.setRange(0, 100000)
+        self.y_edit.setSpecialValueText("—")
+
+        row3.addWidget(y_edit)
+        y_edit_layout.addWidget(self.y_edit)
         self.y_auto_check = QCheckBox("Автоцентр по Y")
         row3.addWidget(self.y_auto_check)
+        row3.addStretch()
         layout.addLayout(row3)
 
+        # Блок: Сдвиг X
         row4 = QHBoxLayout()
-        row4.addWidget(QLabel("Сдвиг X:"))
+
+        shift_x_widget = QWidget()
+        shift_x_layout = QHBoxLayout(shift_x_widget)
+        shift_x_layout.setContentsMargins(0, 0, 0, 0)
+        shift_x_layout.addWidget(QLabel("Сдвиг X (px):"))
         self.x_offset_spin = QSpinBox()
-        self.x_offset_spin.setRange(-500, 500)
-        row4.addWidget(self.x_offset_spin)
-        row4.addWidget(QLabel("Сдвиг Y:"))
-        self.y_offset_spin = QSpinBox()
-        self.y_offset_spin.setRange(-500, 500)
-        row4.addWidget(self.y_offset_spin)
+        self.x_offset_spin.setRange(-1000, 1000)
+        shift_x_layout.addWidget(self.x_offset_spin)
+        row4.addWidget(shift_x_widget)
+
+        row4.addStretch()
         layout.addLayout(row4)
 
+        # Блок: Сдвиг Y
         row5 = QHBoxLayout()
-        row5.addWidget(QLabel("Межстрочный интервал:"))
+        shift_y_widget = QWidget()
+        shift_y_layout = QHBoxLayout(shift_y_widget)
+        shift_y_layout.setContentsMargins(0, 0, 0, 0)
+        shift_y_layout.addWidget(QLabel("Сдвиг Y (px):"))
+        self.y_offset_spin = QSpinBox()
+        self.y_offset_spin.setRange(-1000, 1000)
+        shift_y_layout.addWidget(self.y_offset_spin)
+        row5.addWidget(shift_y_widget)
+        row5.addStretch()
+        layout.addLayout(row5)
+
+        row6 = QHBoxLayout()
+
+        # Блок: Межстрочный интервал
+        spacing_widget = QWidget()
+        spacing_layout = QHBoxLayout(spacing_widget)
+        spacing_layout.setContentsMargins(0, 0, 0, 0)
+        spacing_layout.addWidget(QLabel("Межстрочный интервал (px):"))
         self.line_spacing_spin = QSpinBox()
         self.line_spacing_spin.setRange(0, 100)
         self.line_spacing_spin.setValue(4)
-        row5.addWidget(self.line_spacing_spin)
-        layout.addLayout(row5)
+        spacing_layout.addWidget(self.line_spacing_spin)
+        row6.addWidget(spacing_widget)
+
+        row6.addStretch()
+        layout.addLayout(row6)
 
         btn_pick = QPushButton("Указать точку на грамоте")
         btn_pick.clicked.connect(self.pick_position)
@@ -635,28 +834,46 @@ class DiplomaGenerator(QMainWindow):
             return
 
         try:
-            current_x = int(self.x_edit.text()) if not self.x_auto_check.isChecked() else None
-            current_y = int(self.y_edit.text()) if not self.y_auto_check.isChecked() else None
+            current_x = self.x_edit.value() if self.x_edit.value() > 0 and not self.x_auto_check.isChecked() else None
+            current_y = self.y_edit.value() if self.y_edit.value() > 0 and not self.y_auto_check.isChecked() else None
         except ValueError:
             current_x = None
             current_y = None
 
         align = "left" if self.rb_left.isChecked() else "center"
+        print(f"x_edit.value() = {self.x_edit.value()}")
+        print(f"current_x = {current_x}")
+        print(f"current_y = {current_y}")
         dialog = PointPickerDialog(self.template_path, self, current_x, current_y, align)
         self.apply_theme_to_dialog(dialog, self.current_theme)
         if dialog.exec() == QDialog.Accepted:
             x, y = dialog.get_point()
             if not self.x_auto_check.isChecked():
-                self.x_edit.setText(str(x))
+                self.x_edit.setValue(x)  # ← setValue для QSpinBox
             if not self.y_auto_check.isChecked():
-                self.y_edit.setText(str(y))
+                self.y_edit.setValue(y)  # ← setValue для QSpinBox
 
     def on_font_changed(self):
-        family = self.font_edit.text().strip()
+        """Вызывается при каждом изменении текста в поле шрифта."""
+        text = self.font_edit.text().strip()
 
-        if not family:
+        if not text:
             return
 
+        # Точное совпадение
+        if text in self.fonts_data:
+            self.apply_font_family(text)
+            return
+
+        # Путь к файлу
+        if os.path.exists(text) and text.lower().endswith((".ttf", ".otf")):
+            self.font_path = text
+            self.selected_font_family = ""
+            self.style_combo.setVisible(False)
+            return
+
+    def apply_font_family(self, family):
+        """Применяет выбранное семейство шрифта."""
         styles = self.fonts_data.get(family, {})
 
         if styles:
@@ -665,17 +882,19 @@ class DiplomaGenerator(QMainWindow):
 
             self.style_combo.blockSignals(True)
             self.style_combo.clear()
+
             style_order = [
                 "Thin", "ExtraLight", "Light", "Regular", "Medium",
-                "SemiBold", "Bold", "ExtraBold", "Black", "Thin Italic", "ExtraLight Italic", "Light Italic",
-                "Italic", "Medium Italic", "SemiBold Italic", "Bold Italic", "ExtraBold Italic", "Black Italic"
+                "SemiBold", "Bold", "ExtraBold", "Black",
+                "Thin Italic", "ExtraLight Italic", "Light Italic",
+                "Italic", "Medium Italic", "SemiBold Italic",
+                "Bold Italic", "ExtraBold Italic", "Black Italic"
             ]
             sorted_styles = sorted(
                 styles.keys(),
                 key=lambda s: style_order.index(s) if s in style_order else len(style_order)
             )
             self.style_combo.addItems(sorted_styles)
-
 
             if len(styles) == 1:
                 self.style_combo.setVisible(False)
@@ -689,6 +908,41 @@ class DiplomaGenerator(QMainWindow):
                     self.style_combo.setCurrentText(self.selected_font_style)
 
             self.style_combo.blockSignals(False)
+
+    def normalize_font_input(self):
+        """Вызывается при Enter или потере фокуса."""
+        text = self.font_edit.text().strip()
+
+        if not text:
+            return
+
+        # Точное совпадение
+        if text in self.fonts_data:
+            self.apply_font_family(text)
+            return
+
+        # Путь к файлу
+        if os.path.exists(text) and text.lower().endswith((".ttf", ".otf")):
+            self.font_path = text
+            self.selected_font_family = ""
+            self.style_combo.setVisible(False)
+            return
+
+        # Ищем ближайшее
+        text_lower = text.lower()
+        best_match = None
+
+        for family in self.fonts_data.keys():
+            family_lower = family.lower()
+            if family_lower.startswith(text_lower):
+                if best_match is None or len(family) < len(best_match):
+                    best_match = family
+
+        if best_match:
+            self.font_edit.blockSignals(True)
+            self.font_edit.setText(best_match)
+            self.font_edit.blockSignals(False)
+            self.apply_font_family(best_match)
     # ============================================================
     # ВКЛАДКА: ФОРМАТ ИМЕНИ
     # ============================================================
@@ -723,7 +977,7 @@ class DiplomaGenerator(QMainWindow):
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Отступ от краёв (px):"))
         self.margin_spin = QSpinBox()
-        self.margin_spin.setRange(0, 200)
+        self.margin_spin.setRange(0, 100000)
         self.margin_spin.setValue(36)
         row2.addWidget(self.margin_spin)
         layout.addLayout(row2)
@@ -797,10 +1051,15 @@ class DiplomaGenerator(QMainWindow):
         self.preview_group.addButton(self.rb_preview_custom)
         layout.addWidget(self.rb_preview_test)
         layout.addWidget(self.rb_preview_longest)
-        layout.addWidget(self.rb_preview_custom)
 
+        # Блок: Свой текст + поле
+        custom_widget = QWidget()
+        custom_layout = QHBoxLayout(custom_widget)
+        custom_layout.setContentsMargins(0, 0, 0, 0)
+        custom_layout.addWidget(self.rb_preview_custom)
         self.preview_custom_edit = QLineEdit()
-        layout.addWidget(self.preview_custom_edit)
+        custom_layout.addWidget(self.preview_custom_edit)
+        layout.addWidget(custom_widget)
 
         layout.addStretch()
 
@@ -843,14 +1102,16 @@ class DiplomaGenerator(QMainWindow):
 
         layout.addStretch()
 
+
         # Разделитель
+
+        # О программе
+        layout.addWidget(QLabel("О программе"))
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
 
-        # О программе
-        layout.addWidget(QLabel("О программе"))
         layout.addWidget(QLabel("AutoFillSurnames"))
         layout.addWidget(QLabel("Версия 1.0.0"))
 
@@ -859,10 +1120,16 @@ class DiplomaGenerator(QMainWindow):
         layout.addWidget(QLabel("Alexey «TWorker» Zhaliy"))
         layout.addWidget(QLabel("Maxim «jojer» Odincov"))
 
+        btn_help = QPushButton("Инструкция")
+        btn_help.clicked.connect(self.show_help)
+        layout.addWidget(btn_help)
+
         # Кнопка лицензии
         btn_license = QPushButton("Лицензия")
         btn_license.clicked.connect(self.show_license)
         layout.addWidget(btn_license)
+
+
 
     def show_license(self):
         text = """AutoFillSurnames
@@ -905,6 +1172,19 @@ class DiplomaGenerator(QMainWindow):
 
         # Сохраняем текущую тему
         self.current_theme = theme
+
+    def show_help(self):
+        text = """Правая кнопка мыши — поставить точку
+    Левая кнопка — перетаскивание
+    Колесо мыши — зум
+    Стрелки — сдвиг точки
+    Shift + стрелки — сдвиг на 10px
+    Ctrl + стрелки — сдвиг на 50px
+    Alt — показать расстояние от точки до курсора"""
+
+        dialog = MessageDialog(self, "Инструкция", text, buttons=[("Понятно", "primary")])
+        self.apply_theme_to_dialog(dialog, self.current_theme)
+        dialog.exec()
     # ============================================================
     # ШРИФТ
     # ============================================================
@@ -976,8 +1256,8 @@ class DiplomaGenerator(QMainWindow):
 
             parts = self.get_preview_parts(people)
 
-            x = "center" if self.x_auto_check.isChecked() else int(self.x_edit.text() or 0)
-            y = "center" if self.y_auto_check.isChecked() else int(self.y_edit.text() or 0)
+            x = "center" if (self.x_auto_check.isChecked() or self.x_edit.value() == 0) else self.x_edit.value()
+            y = "center" if (self.y_auto_check.isChecked() or self.y_edit.value() == 0) else self.y_edit.value()
 
             lines = format_name_lines(parts, self.get_name_mode(), self.split_after_spin.value())
             if lines is None:
@@ -1031,6 +1311,12 @@ class DiplomaGenerator(QMainWindow):
             return
         if not self.font_path and not self.selected_font_family:
             dialog = MessageDialog(self, "Ошибка", "Выбери файл шрифта или системный шрифт.", buttons=[("ОК", "primary")])
+            self.apply_theme_to_dialog(dialog, self.current_theme)
+            dialog.exec()
+            return
+        if self.selected_font_family and self.selected_font_family not in self.fonts_data:
+            dialog = MessageDialog(self, "Ошибка", f"Шрифт «{self.selected_font_family}» не найден. Выбери из списка.",
+                                   buttons=[("ОК", "primary")])
             self.apply_theme_to_dialog(dialog, self.current_theme)
             dialog.exec()
             return
@@ -1137,8 +1423,8 @@ class DiplomaGenerator(QMainWindow):
             font = self.get_font()
             img_w, img_h = template.size
 
-            x = "center" if self.x_auto_check.isChecked() else int(self.x_edit.text() or 0)
-            y = "center" if self.y_auto_check.isChecked() else int(self.y_edit.text() or 0)
+            x = "center" if (self.x_auto_check.isChecked() or self.x_edit.value() == 0) else self.x_edit.value()
+            y = "center" if (self.y_auto_check.isChecked() or self.y_edit.value() == 0) else self.y_edit.value()
 
             output_dir = self.output_dir_edit.text() or "Грамоты"
             os.makedirs(output_dir, exist_ok=True)
@@ -1209,6 +1495,8 @@ class DiplomaGenerator(QMainWindow):
                 generated_people = people
 
             pdf_pages = [] if (self.get_output_format() == "pdf" and self.get_pdf_mode() == "single") else None
+
+
 
             # Для single PDF — не проверяем каждый файл
             skip_individual_check = (self.get_output_format() == "pdf" and self.get_pdf_mode() == "single")

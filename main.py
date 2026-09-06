@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QApplication
 
 from core.windows_utils import set_title_bar_color, set_title_bar_light_theme
 from ui.main_window import DiplomaGenerator
-from PySide6.QtCore import QTranslator, QLibraryInfo
 from core.screen_utils import center_window
 
 if __name__ == "__main__":
@@ -12,14 +11,20 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    translator = QTranslator()
-    translator.load("qtbase_ru", QLibraryInfo.path(QLibraryInfo.TranslationsPath))
-    app.installTranslator(translator)
-    style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "style.qss")
+    # Определяем base_path
+    if getattr(sys, 'frozen', False):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    style_path = os.path.join(base_path, "style.qss")
     if os.path.exists(style_path):
         with open(style_path, "r", encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
+            style_content = f.read()
 
+        # Заменяем относительные пути на абсолютные
+        style_content = style_content.replace('url("icons/', f'url("{base_path}/icons/')
+        app.setStyleSheet(style_content)
 
     window = DiplomaGenerator()
     window.show()

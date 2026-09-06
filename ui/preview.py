@@ -28,6 +28,7 @@ class PreviewDialog(QDialog):
 
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
+        self.view.wheelEvent = self.on_wheel
 
         layout.addWidget(self.view)
 
