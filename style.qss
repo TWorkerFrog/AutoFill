@@ -6,6 +6,11 @@ QMainWindow {
     background-color: #222222;
 }
 
+QLineEdit, QTextEdit, QSpinBox, QComboBox {
+    selection-background-color: #7F43E3;
+    selection-color: #F2F2F2;
+}
+
 QWidget {
     background-color: #222222;
     color: #F2F2F2;
@@ -109,17 +114,53 @@ QDialog {
     background-color: #222222;
 }
 
-QSpinBox::up-button, QSpinBox::down-button {
+QSpinBox::up-button{
+    image: url("icons/BlackTheme/arrow-up.svg");
     width: 20px;
-    background-color: #3A3A3A;
+    border-radius: 3px;
+}
+QSpinBox::down-button{
+    image: url("icons/BlackTheme/arrow-down.svg");
+    width: 20px;
     border-radius: 3px;
 }
 
-QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-    background-color: #4E4E4E;
+QSpinBox::up-button:hover {
+    image: url("icons/BlackTheme/arrow-up-hover.svg");
 }
 
+QSpinBox::down-button:hover{
+    image: url("icons/BlackTheme/arrow-down-hover.svg");
+    width: 20px;
+    border-radius: 3px;
+}
 
+QComboBox {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+QComboBox:focus {
+    border-color: #7F43E3;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox::down-arrow {
+    image: url("icons/BlackTheme/arrow-down.svg");
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    padding-right: 10px;
+}
+QComboBox::down-arrow:hover {
+    image: url("icons/BlackTheme/arrow-down-hover.svg");
+}
 
 /* ============================================
    СВЕТЛАЯ ТЕМА
@@ -127,6 +168,10 @@ QSpinBox::up-button:hover, QSpinBox::down-button:hover {
 
 QMainWindow[theme="light"] {
     background-color: #F2F2F2;
+}
+QLineEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"], QComboBox[theme="light"] {
+    selection-background-color: #7F43E3;
+    selection-color: #F2F2F2;
 }
 
 QWidget[theme="light"] {
@@ -216,10 +261,50 @@ QDialog[theme="light"] {
     background-color: #F2F2F2;
 }
 
-QSpinBox[theme="light"]::up-button, QSpinBox[theme="light"]::down-button {
-    background-color: #E0E0E0;
+QSpinBox[theme="light"]::up-button{
+    image: url("icons/LightTheme/arrow-up.svg");
+    width: 20px;
+    border-radius: 3px;
+}
+QSpinBox[theme="light"]::down-button{
+    image: url("icons/LightTheme/arrow-down.svg");
+    width: 20px;
+    border-radius: 3px;
 }
 
-QSpinBox[theme="light"]::up-button:hover, QSpinBox[theme="light"]::down-button:hover {
-    background-color: #C4C4C4;
+QSpinBox[theme="light"]::up-button:hover {
+    image: url("icons/LightTheme/arrow-up-hover.svg");
+}
+
+QSpinBox[theme="light"]::down-button:hover{
+    image: url("icons/LightTheme/arrow-down-hover.svg");
+    width: 20px;
+    border-radius: 3px;
+}
+
+QComboBox[theme="light"] {
+    background-color: #F2F2F2;
+    color: #0D0D0D;
+    border: 1px solid #CCCCCC;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+QComboBox[theme="light"]:focus {
+    border-color: #7F43E3;
+}
+
+QComboBox[theme="light"]::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox[theme="light"]::down-arrow {
+    image: url("icons/LightTheme/arrow-down.svg");
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    padding-right: 10px;
+}
+QComboBox[theme="light"]::down-arrow:hover {
+    image: url("icons/LightTheme/arrow-down-hover.svg");
 }

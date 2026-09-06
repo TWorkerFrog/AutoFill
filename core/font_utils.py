@@ -1,86 +1,165 @@
 import os
+from fontTools.ttLib import TTFont
 
 
-def get_system_font_path(family, style=None):
+def get_font_metadata(path):
     """
-    Рекурсивно ищет файл шрифта по названию семейства и начертанию.
+    Читает имя семейства и стиль из TTF/OTF файла.
+    Возвращает (family, style).
     """
-    fonts_dir = "C:/Windows/Fonts"
+    try:
+        font = TTFont(path)
+        name_table = font["name"]
 
-    family_lower = family.lower()
+        family = None
+        subfamily = None
 
+        for record in name_table.names:
+            # nameID 1 = Font Family, 2 = Font Subfamily, 4 = Full Name
+            if record.nameID == 1:
+                family = record.toUnicode()
+            elif record.nameID == 2:
+                subfamily = record.toUnicode()
+
+        font.close()
+
+        if family:
+            return family, subfamily or "Regular"
+    except:
+        pass
+
+    return None, None
+
+
+def scan_fonts():
+    fonts = {}
+
+    fonts_dirs = [
+        "C:/Windows/Fonts",
+        os.path.expanduser("~") + "/AppData/Local/Microsoft/Windows/Fonts"
+    ]
+
+    for fonts_dir in fonts_dirs:
+        if not os.path.exists(fonts_dir):
+            continue
+
+        for root, dirs, files in os.walk(fonts_dir):
+            for file in files:
+                if not file.lower().endswith((".ttf", ".otf")):
+                    continue
+
+                full_path = os.path.join(root, file)
+
+                # Читаем реальное имя из метаданных
+                family, style = get_font_metadata(full_path)
+
+                if not family:
+                    # Фолбэк — используем имя файла
+                    name = os.path.splitext(file)[0]
+                    family = name
+                    style = "Regular"
+
+                if family not in fonts:
+                    fonts[family] = {}
+
+                if style not in fonts[family]:
+                    fonts[family][style] = full_path
+
+    for family in list(fonts.keys()):
+        if " " in family:
+            first_word = family.split(" ")[0]
+            if first_word in fonts and len(fonts[first_word]) > 1:
+                style_from_name = family.split(" ", 1)[1]  # "Black", "Bold", etc.
+
+                for style, path in fonts[family].items():
+                    if style == "Regular":
+                        # Montserrat Black + Regular → Black
+                        final_style = style_from_name
+                    elif style == "Italic":
+                        # Montserrat Black + Italic → Black Italic
+                        final_style = style_from_name + " Italic"
+                    else:
+                        final_style = style_from_name + " " + style
+
+                    if final_style not in fonts[first_word]:
+                        fonts[first_word][final_style] = path
+
+                del fonts[family]
+
+    return fonts
+
+'''
+def detect_family(name, root, fonts_dir):
+    """
+    Определяет семейство по имени файла и пути.
+    """
+    # Если файл в подпапке — имя подпапки = семейство
+    if root != fonts_dir:
+        rel = os.path.relpath(root, fonts_dir)
+        return rel.split(os.sep)[0]
+
+    # Пробуем известные стили
+    style_keywords = [
+        "regular", "bold", "italic", "light", "thin", "medium",
+        "black", "extrabold", "extralight", "semibold",
+        "bolditalic", "blackitalic", "lightitalic", "thinitalic",
+        "mediumitalic", "extrabolditalic", "extralightitalic",
+        "semibolditalic", "обычный", "полужирный", "курсив",
+        "тонкий", "очень тонкий", "средний", "очень жирный",
+        "сверхжирный", "сверхтонкий",
+    ]
+
+    name_lower = name.lower()
+
+    # Ищем стиль в конце имени
+    for keyword in style_keywords:
+        if name_lower.endswith(keyword):
+            family = name[: -len(keyword)].rstrip("- ").strip()
+            return family
+
+    # Ищем с дефисом
+    for keyword in style_keywords:
+        if name_lower.endswith("-" + keyword):
+            family = name[: -len(keyword) - 1].rstrip("- ").strip()
+            return family
+
+    # Если не нашли — это одиночный шрифт
+    return name
+
+
+def detect_style(name):
+    """
+    Определяет стиль по имени файла.
+    """
     style_map = {
-        "Regular": "regular",
-        "Bold": "bold",
-        "SemiBold": "semibold",
-        "Italic": "italic",
-        "Bold Italic": "bolditalic",
-        "Light": "light",
-        "Thin": "thin",
-        "Medium": "medium",
-        "Black": "black",
-        "ExtraBold": "extrabold",
-        "ExtraLight": "extralight",
-        "Black Italic": "blackitalic",
-        "Bold Italic": "bolditalic",
-        "ExtraBold Italic": "extrabolditalic",
-        "SemiBold Italic": "semibolditalic",
-        "Light Italic": "lightitalic",
-        "ExtraLight Italic": "extralightitalic",
-        "Thin Italic": "thinitalic",
-        "Medium Italic": "mediumitalic",
+        "regular": "Regular",
+        "обычный": "Regular",
+        "bold": "Bold",
+        "полужирный": "Bold",
+        "italic": "Italic",
+        "курсив": "Italic",
+        "light": "Light",
+        "тонкий": "Light",
+        "thin": "Thin",
+        "очень тонкий": "Thin",
+        "medium": "Medium",
+        "средний": "Medium",
+        "black": "Black",
+        "очень жирный": "Black",
+        "extrabold": "ExtraBold",
+        "сверхжирный": "ExtraBold",
+        "extralight": "ExtraLight",
+        "сверхтонкий": "ExtraLight",
+        "semibold": "SemiBold",
+        "bolditalic": "Bold Italic",
+        "blackitalic": "Black Italic",
     }
 
-    all_font_files = []
-    for root, dirs, files in os.walk(fonts_dir):
-        for file in files:
-            if file.lower().endswith((".ttf", ".otf")):
-                all_font_files.append(os.path.join(root, file))
+    name_lower = name.lower()
 
-    # Если стиль указан
-    if style:
-        # Нормализуем стиль: убираем пробелы, приводим к нижнему регистру
-        style_normalized = style_map.get(style, style.replace(" ", "").lower())
+    for keyword, style in style_map.items():
+        if name_lower.endswith(keyword) or name_lower.endswith("-" + keyword):
+            return style
 
-        # 1. Точное совпадение: family-style.ttf (стиль без пробелов)
-        for path in all_font_files:
-            file_name = os.path.basename(path).lower()
-            file_base = file_name.rsplit(".", 1)[0]  # без расширения
-
-            # Montserrat-BlackItalic.ttf
-            if file_base == f"{family_lower}-{style_normalized}":
-                return path
-
-            # MontserratBlackItalic.ttf
-            if file_base == f"{family_lower}{style_normalized}":
-                return path
-
-        # 2. Файл содержит и семейство, и стиль (без пробелов)
-        for path in all_font_files:
-            file_name = os.path.basename(path).lower()
-            if family_lower in file_name and style_normalized in file_name:
-                return path
-
-        # 3. Стиль с пробелом — пробуем частями
-        style_parts = style.lower().split()
-        for path in all_font_files:
-            file_name = os.path.basename(path).lower()
-            if family_lower in file_name:
-                if all(part in file_name for part in style_parts):
-                    return path
-
-        # 4. Первая часть стиля (Black из Black Italic)
-        if style_parts:
-            first_part = style_parts[0]
-            for path in all_font_files:
-                file_name = os.path.basename(path).lower()
-                if family_lower in file_name and first_part in file_name:
-                    return path
-
-    # Без стиля — просто по семейству
-    for path in all_font_files:
-        file_name = os.path.basename(path).lower()
-        if family_lower in file_name:
-            return path
-
-    return None
+    return "Regular"
+'''

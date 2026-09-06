@@ -1,26 +1,27 @@
 import os
 import json
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QUrl, Qt, QStringListModel
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QCheckBox, QRadioButton,
     QButtonGroup, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
-    QTabWidget, QSpinBox, QDialog, QSplitter
+    QTabWidget, QSpinBox, QDialog, QSplitter, QCompleter, QComboBox
 )
-from PySide6.QtGui import QFont, QColor, QDesktopServices
+from PySide6.QtGui import QFont, QColor, QDesktopServices, QFontDatabase
 from PySide6.QtWidgets import QFrame
 from PIL import Image, ImageDraw
 
 from core.text_render import draw_text_block, check_text_bounds
 from core.name_format import format_name_lines, resolve_auto_lines, plural
-from core.font_utils import get_system_font_path
 from core.name_format import plural_instrumental
 from core.screen_utils import get_window_size
+from core.font_utils import scan_fonts
 from ui.point_picker import PointPickerDialog
 from ui.preview import PreviewDialog
 from ui.font_picker import FontPickerDialog
 from ui.message_dialog import MessageDialog
+
 
 
 
@@ -32,6 +33,7 @@ class DiplomaGenerator(QMainWindow):
         self.resize(w, h)
         self.settings_file = "settings.json"
         self.load_settings()
+        self.fonts_data = scan_fonts()
 
         self.template_path = ""
         self.font_path = ""
@@ -183,20 +185,39 @@ class DiplomaGenerator(QMainWindow):
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Шрифт:"))
         self.font_edit = QLineEdit()
-        row2.addWidget(self.font_edit)
+        self.font_edit.setPlaceholderText("Начни вводить название...")
+        self.font_edit.setMinimumWidth(250)  # ← минимальная ширина
+        row2.addWidget(self.font_edit, stretch=1)  # ← растягивается
+        self.style_combo = QComboBox()
+        self.style_combo.setFixedWidth(150)
+        row2.addWidget(self.style_combo)
+        self.style_combo.currentTextChanged.connect(self.on_style_changed)
+
+        # Файл
         btn_font_file = QPushButton("Файл")
         btn_font_file.clicked.connect(self.choose_font_file)
         row2.addWidget(btn_font_file)
-        btn_font_system = QPushButton("Системный")
-        btn_font_system.clicked.connect(self.choose_system_font)
-        row2.addWidget(btn_font_system)
+
         layout.addLayout(row2)
+
+        self.font_db = QFontDatabase()
+        # Используем только реальные семейства из метаданных
+        self.all_fonts = sorted(self.fonts_data.keys())
+
+        self.completer = QCompleter(self.all_fonts)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setFilterMode(Qt.MatchContains)  # ← поиск по подстроке
+        self.font_edit.setCompleter(self.completer)
+
+        # При выборе шрифта обновляем начертания
+        self.font_edit.textChanged.connect(self.on_font_changed)
+
 
         row3 = QHBoxLayout()
         row3.addWidget(QLabel("Размер:"))
         self.font_size_spin = QSpinBox()
-        self.font_size_spin.setSpecialValueText("—")
-        self.font_size_spin.setRange(8, 500)
+        self.font_size_spin.setSpecialValueText(" ")
+        self.font_size_spin.setRange(0, 500)
         self.font_size_spin.setValue(0)
         row3.addWidget(self.font_size_spin)
 
@@ -448,6 +469,28 @@ class DiplomaGenerator(QMainWindow):
 
         return False
 
+    def update_styles_for_font(self):
+        family = self.font_edit.text().strip()
+        styles = self.font_db.styles(family)
+
+        self.style_combo.clear()
+        self.style_combo.addItems(styles)
+
+        if self.selected_font_style in styles:
+            self.style_combo.setCurrentText(self.selected_font_style)
+
+    def apply_selected_font(self):
+        family = self.font_edit.text().strip()
+        style = self.style_combo.currentText()
+
+        if family:
+            self.selected_font_family = family
+            self.selected_font_style = style
+            self.font_path = ""
+
+    def on_style_changed(self):
+        self.selected_font_style = self.style_combo.currentText()
+        print(f"Выбран стиль: {self.selected_font_style}")  # ← для отладки
     # ============================================================
     # ВКЛАДКА: ПОЗИЦИЯ
     # ============================================================
@@ -530,6 +573,44 @@ class DiplomaGenerator(QMainWindow):
             if not self.y_auto_check.isChecked():
                 self.y_edit.setText(str(y))
 
+    def on_font_changed(self):
+        family = self.font_edit.text().strip()
+
+        if not family:
+            return
+
+        styles = self.fonts_data.get(family, {})
+
+        if styles:
+            self.selected_font_family = family
+            self.font_path = ""
+
+            self.style_combo.blockSignals(True)
+            self.style_combo.clear()
+            style_order = [
+                "Thin", "ExtraLight", "Light", "Regular", "Medium",
+                "SemiBold", "Bold", "ExtraBold", "Black", "Thin Italic", "ExtraLight Italic", "Light Italic",
+                "Italic", "Medium Italic", "SemiBold Italic", "Bold Italic", "ExtraBold Italic", "Black Italic"
+            ]
+            sorted_styles = sorted(
+                styles.keys(),
+                key=lambda s: style_order.index(s) if s in style_order else len(style_order)
+            )
+            self.style_combo.addItems(sorted_styles)
+
+
+            if len(styles) == 1:
+                self.style_combo.setVisible(False)
+                self.selected_font_style = list(styles.keys())[0]
+            else:
+                self.style_combo.setVisible(True)
+                if self.selected_font_style in styles:
+                    self.style_combo.setCurrentText(self.selected_font_style)
+                else:
+                    self.selected_font_style = list(styles.keys())[0]
+                    self.style_combo.setCurrentText(self.selected_font_style)
+
+            self.style_combo.blockSignals(False)
     # ============================================================
     # ВКЛАДКА: ФОРМАТ ИМЕНИ
     # ============================================================
@@ -752,11 +833,21 @@ class DiplomaGenerator(QMainWindow):
         if self.font_path:
             print(f"Использую файл: {self.font_path}")
             return ImageFont.truetype(self.font_path, size=size)
-        elif self.selected_font_family:
-            path = get_system_font_path(self.selected_font_family, getattr(self, "selected_font_style", None))
-            print(f"Найден путь: {path}")
-            if path:
-                return ImageFont.truetype(path, size=size)
+
+        if self.selected_font_family:
+            family_fonts = self.fonts_data.get(self.selected_font_family, {})
+            print(f"Доступные стили для '{self.selected_font_family}': {list(family_fonts.keys())}")
+            if family_fonts:
+                path = family_fonts.get(self.selected_font_style)
+                if path:
+                    return ImageFont.truetype(path, size=size)
+
+            for fam, styles in self.fonts_data.items():
+                if self.selected_font_family in fam:
+                    if styles:
+                        first_style = list(styles.keys())[0]
+                        print(f"Стиль не найден, беру первый: '{first_style}' → {first_style}")
+                        return ImageFont.truetype(styles[first_style], size=size)
 
         print("Использую arial.ttf")
         return ImageFont.truetype("arial.ttf", size=size)
