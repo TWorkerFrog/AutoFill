@@ -1,34 +1,52 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 
+from core.screen_utils import center_window
 from core.windows_utils import set_title_bar_color, set_title_bar_light_theme
 from ui.main_window import DiplomaGenerator
-from core.screen_utils import center_window
+
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
 
 if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
     app = QApplication(sys.argv)
 
-    # Определяем base_path
-    if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
+    icon = QIcon(":/icons/app_icon.ico")
+    if not icon.isNull():
+        app.setWindowIcon(icon)
     else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
+        # Фолбек: пробуем из файла
+        icon_path = resource_path("icons/app_icon.ico")
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
 
-    style_path = os.path.join(base_path, "style.qss")
+
+    # Стили
+    style_path = resource_path("style.qss")
     if os.path.exists(style_path):
         with open(style_path, "r", encoding="utf-8") as f:
-            style_content = f.read()
+            app.setStyleSheet(f.read())
 
-        # Заменяем относительные пути на абсолютные
-        style_content = style_content.replace('url("icons/', f'url("{base_path}/icons/')
-        app.setStyleSheet(style_content)
-
+    # Окно
     window = DiplomaGenerator()
+
+    # Иконка для окна (из ресурсов)
+    if not icon.isNull():
+        window.setWindowIcon(icon)
+
     window.show()
+
+    # Настройки заголовка
     set_title_bar_color(window, "#222222")
     set_title_bar_light_theme(window, False)
     center_window(window)
+
     sys.exit(app.exec())

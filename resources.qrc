@@ -1,0 +1,21 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <!-- Тёмная тема -->
+    <file>icons/BlackTheme/check.png</file>
+    <file>icons/BlackTheme/radio-checked.png</file>
+    <file>icons/BlackTheme/arrow-up.png</file>
+    <file>icons/BlackTheme/arrow-down.png</file>
+    <file>icons/BlackTheme/arrow-up-hover.png</file>
+    <file>icons/BlackTheme/arrow-down-hover.png</file>
+
+    <!-- Светлая тема -->
+    <file>icons/LightTheme/check.png</file>
+    <file>icons/LightTheme/radio-checked.png</file>
+    <file>icons/LightTheme/arrow-up.png</file>
+    <file>icons/LightTheme/arrow-down.png</file>
+    <file>icons/LightTheme/arrow-up-hover.png</file>
+    <file>icons/LightTheme/arrow-down-hover.png</file>
+
+    <file>icons/app_icon.ico</file>
+</qresource>
+</RCC>

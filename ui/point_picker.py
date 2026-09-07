@@ -102,12 +102,13 @@ class PointPickerDialog(QDialog):
 
         layout = QVBoxLayout()
         if self.align == "left":
-            hint = "Правая кнопка мыши — поставить точку (левый край, центр по вертикали)"
+            hint = "Правая кнопка мыши – поставить точку (левый край, центр по вертикали)"
         else:
-            hint = "Правая кнопка мыши — поставить точку (центр текста)"
+            hint = "Правая кнопка мыши – поставить точку (центр текста)"
         layout.addWidget(QLabel(hint))
-        layout.addWidget(QLabel("Левая кнопка — перетаскивание | Колесо мыши — зум | Стрелки — сдвиг | Shift — 10px | Ctrl — 50px | Alt — расстояние"))
+        layout.addWidget(QLabel("Левая кнопка – перемещать изображение | Колесо мыши – зум | Стрелки – сдвиг | Shift – 10px | Ctrl – 50px | Alt (зажать) + навести курсор + клик левой мышью (зажать) – показывает расстояние"))
         layout.addWidget(self.view)
+        layout.addLayout(zoom_layout)
         layout.addLayout(zoom_layout)
         layout.addWidget(self.info_label)
         layout.addWidget(self.ok_btn)

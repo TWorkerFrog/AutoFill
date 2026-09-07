@@ -54,7 +54,7 @@ class DiplomaGenerator(QMainWindow):
 
         self.create_ui()
 
-        appdata = os.path.join(os.path.expanduser("~"), "AppData", "Local", "AutoFillSurnames")
+        appdata = os.path.join(os.path.expanduser("~"), "AppData", "Local", "AutoFill")
         os.makedirs(appdata, exist_ok=True)
         self.settings_file = os.path.join(appdata, "settings.json")
         self.load_settings()
@@ -306,7 +306,7 @@ class DiplomaGenerator(QMainWindow):
         # Подпись + поле + кнопки для основного списка
         self.names_widget = QWidget()
         names_layout = QVBoxLayout(self.names_widget)
-        names_layout.addWidget(QLabel("Список ФИО (каждая строка — один человек):"))
+        names_layout.addWidget(QLabel("Список ФИО (каждая строка – один человек):"))
 
         # Поиск
         self.search_edit = QLineEdit()
@@ -336,7 +336,7 @@ class DiplomaGenerator(QMainWindow):
         # Подпись + поле + кнопки для исключений
         self.excluded_widget = QWidget()
         excluded_layout = QVBoxLayout(self.excluded_widget)
-        excluded_layout.addWidget(QLabel("Исключения (сюда попадают те, кто не влез):"))
+        excluded_layout.addWidget(QLabel("Исключения (сюда попадают ФИО, которые не влезли в границы грамоты):"))
 
         self.excluded_search_edit = QLineEdit()
         self.excluded_search_edit.setPlaceholderText("Поиск по исключениям...")
@@ -346,7 +346,7 @@ class DiplomaGenerator(QMainWindow):
         excluded_layout.addWidget(self.excluded_search_edit)
 
         self.excluded_text = QTextEdit()
-        self.excluded_text.setPlaceholderText("Сюда попадут ФИО, которые не влезли в границы")
+        self.excluded_text.setPlaceholderText("Иванов Иван Иванович")
         self.excluded_text.textChanged.connect(self.on_text_edited)
         excluded_layout.addWidget(self.excluded_text)
         # Кнопки
@@ -437,7 +437,7 @@ class DiplomaGenerator(QMainWindow):
             elif dialog.result == 1:  # Добавить
                 self.all_names = current + "\n" + new_content
                 self.names_text.setPlainText(self.all_names)
-            # Отмена — ничего не делаем
+            # Отмена – ничего не делаем
         else:
             self.all_names = new_content
             self.names_text.setPlainText(new_content)
@@ -474,7 +474,7 @@ class DiplomaGenerator(QMainWindow):
                 self.names_text.setPlainText("\n".join(" ".join(p) for p in excluded_people))
                 self.excluded_text.clear()
                 return
-            # Если Нет — проверяем, кого нет в основном списке
+            # Если Нет – проверяем, кого нет в основном списке
             missing = [
                 p for p in excluded_people
                 if not self.is_person_in_list(p, current_people)
@@ -490,7 +490,7 @@ class DiplomaGenerator(QMainWindow):
                 else:
                     self.names_text.setPlainText("\n".join(" ".join(p) for p in missing))
         else:
-            # Не спрашиваем — просто очищаем и вставляем
+            # Не спрашиваем – просто очищаем и вставляем
             self.names_text.setPlainText("\n".join(" ".join(p) for p in excluded_people))
 
         self.excluded_text.clear()
@@ -596,8 +596,8 @@ class DiplomaGenerator(QMainWindow):
             all_data = getattr(self, all_data_attr, "")
             current_text = text_edit.toPlainText()
 
-            # Если current_text — это отфильтрованный список (одна строка),
-            # а all_data — полный, то надо слить
+            # Если current_text – это отфильтрованный список (одна строка),
+            # а all_data – полный, то надо слить
             if all_data and current_text:
                 all_lines = all_data.split("\n")
                 current_lines = current_text.split("\n")
@@ -611,11 +611,11 @@ class DiplomaGenerator(QMainWindow):
 
                     # Проверяем: была ли эта строка видима в фильтре?
                     if current_idx < len(current_stripped) and stripped == current_stripped[current_idx]:
-                        # Строка видима — берём из current (возможно изменена)
+                        # Строка видима – берём из current (возможно изменена)
                         updated.append(current_lines[current_idx])
                         current_idx += 1
                     else:
-                        # Не видима — оставляем как есть
+                        # Не видима – оставляем как есть
                         updated.append(line)
 
                 # Добавляем оставшиеся новые строки
@@ -647,7 +647,7 @@ class DiplomaGenerator(QMainWindow):
             result = []
             for line in all_lines:
                 if search_text.lower() in line.lower():
-                    # Эта строка была видима — берём из current
+                    # Эта строка была видима – берём из current
                     if current_lines:
                         result.append(current_lines.pop(0).strip())
                 else:
@@ -751,7 +751,7 @@ class DiplomaGenerator(QMainWindow):
         x_edit_layout.addWidget(QLabel("X (px):"))
         self.x_edit = QSpinBox()
         self.x_edit.setRange(0, 100000)
-        self.x_edit.setSpecialValueText("—")
+        self.x_edit.setSpecialValueText("0")
 
         row2.addWidget(x_edit)
         x_edit_layout.addWidget(self.x_edit)
@@ -767,7 +767,7 @@ class DiplomaGenerator(QMainWindow):
         y_edit_layout.addWidget(QLabel("Y (px):"))
         self.y_edit = QSpinBox()
         self.y_edit.setRange(0, 100000)
-        self.y_edit.setSpecialValueText("—")
+        self.y_edit.setSpecialValueText("0")
 
         row3.addWidget(y_edit)
         y_edit_layout.addWidget(self.y_edit)
@@ -1112,8 +1112,8 @@ class DiplomaGenerator(QMainWindow):
         line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
 
-        layout.addWidget(QLabel("AutoFillSurnames"))
-        layout.addWidget(QLabel("Версия 1.0.0"))
+        layout.addWidget(QLabel("AutoFill"))
+        layout.addWidget(QLabel("Версия 1.0"))
 
         # Авторы
         layout.addWidget(QLabel("Авторы:"))
@@ -1132,7 +1132,7 @@ class DiplomaGenerator(QMainWindow):
 
 
     def show_license(self):
-        text = """AutoFillSurnames
+        text = """AutoFill
 
     Required Notice: Copyright (c) 2026 TWorker and Maxim Odincov. All rights reserved.
 
@@ -1174,13 +1174,35 @@ class DiplomaGenerator(QMainWindow):
         self.current_theme = theme
 
     def show_help(self):
-        text = """Правая кнопка мыши — поставить точку
-    Левая кнопка — перетаскивание
-    Колесо мыши — зум
-    Стрелки — сдвиг точки
-    Shift + стрелки — сдвиг на 10px
-    Ctrl + стрелки — сдвиг на 50px
-    Alt — показать расстояние от точки до курсора"""
+        text = """КАК РАБОТАТЬ С ПРОГРАММОЙ
+
+    1. Выберите шаблон грамоты (JPG или PNG)
+    2. Выберите шрифт из списка или загрузите свой файл
+    3. Укажите размер шрифта в пикселях
+    4. Вставьте список ФИО (каждое имя с новой строки)
+    5. Настройте позицию текста во вкладке «Позиция»
+
+    ОКНО ВЫБОРА ТОЧКИ
+
+    • Правая кнопка мыши – установить точку в месте клика
+    • Левая кнопка мыши – перемещать изображение
+    • Колесо мыши – приблизить/отдалить
+    • Стрелки на клавиатуре – сдвиг точки на 1 пиксель
+    • Shift + стрелки – сдвиг на 10 пикселей
+    • Ctrl + стрелки – сдвиг на 50 пикселей
+    • Alt (зажать) + навести курсор + клик левой мышью (зажать) – показывает расстояние от точки до курсора
+
+    ИСКЛЮЧЕНИЯ
+
+    Сюда попадают ФИО, которые не влезли в границы грамоты.
+    Их можно:
+    • Перенести обратно в основной список
+    • Очистить
+    • Сгенерировать отдельно с меньшим шрифтом
+
+    НАСТРОЙКИ СОХРАНЯЮТСЯ АВТОМАТИЧЕСКИ
+
+    При закрытии программы выберите «Сохранить» – и все настройки сохранятся до следующего запуска."""
 
         dialog = MessageDialog(self, "Инструкция", text, buttons=[("Понятно", "primary")])
         self.apply_theme_to_dialog(dialog, self.current_theme)
@@ -1269,7 +1291,7 @@ class DiplomaGenerator(QMainWindow):
                 self.letter_spacing_spin.value(), img_w, self.margin_spin.value()
             )
             if problems:
-                msg = "\n".join(f"{text} — на {overflow}px ({side})" for text, overflow, side in problems)
+                msg = "\n".join(f"{text} – на {overflow}px ({side})" for text, overflow, side in problems)
                 dialog = MessageDialog(self, "Текст выходит за границы", msg, buttons=[("ОК", "primary")])
                 self.apply_theme_to_dialog(dialog, self.current_theme)
                 dialog.exec()
@@ -1429,7 +1451,7 @@ class DiplomaGenerator(QMainWindow):
             output_dir = self.output_dir_edit.text() or "Грамоты"
             os.makedirs(output_dir, exist_ok=True)
 
-            # Для single PDF — проверяем только общий файл
+            # Для single PDF – проверяем только общий файл
             if self.get_output_format() == "pdf" and self.get_pdf_mode() == "single":
                 pdf_filename = f"{self.pdf_name_edit.text()}.pdf"
                 pdf_path = os.path.join(output_dir, pdf_filename)
@@ -1469,7 +1491,7 @@ class DiplomaGenerator(QMainWindow):
                 for parts, problems in problematic[:15]:
                     name = " ".join(parts)
                     overflow_info = "; ".join(f"{text}: +{overflow}px" for text, overflow, _ in problems)
-                    msg += f"• {name} — {overflow_info}\n"
+                    msg += f"• {name} – {overflow_info}\n"
                 if len(problematic) > 15:
                     msg += f"\n...и ещё {len(problematic) - 15}\n"
 
@@ -1498,7 +1520,7 @@ class DiplomaGenerator(QMainWindow):
 
 
 
-            # Для single PDF — не проверяем каждый файл
+            # Для single PDF – не проверяем каждый файл
             skip_individual_check = (self.get_output_format() == "pdf" and self.get_pdf_mode() == "single")
 
             for idx, parts in enumerate(generated_people, 1):
