@@ -6,7 +6,7 @@ from PySide6.QtGui import QIcon
 from core.screen_utils import center_window
 from core.windows_utils import set_title_bar_color, set_title_bar_light_theme
 from ui.main_window import DiplomaGenerator
-
+import resources_rc
 
 def resource_path(relative_path):
     try:

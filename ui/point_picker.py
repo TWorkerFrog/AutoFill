@@ -106,9 +106,8 @@ class PointPickerDialog(QDialog):
         else:
             hint = "Правая кнопка мыши – поставить точку (центр текста)"
         layout.addWidget(QLabel(hint))
-        layout.addWidget(QLabel("Левая кнопка – перемещать изображение | Колесо мыши – зум | Стрелки – сдвиг | Shift – 10px | Ctrl – 50px | Alt (зажать) + навести курсор + клик левой мышью (зажать) – показывает расстояние"))
+        layout.addWidget(QLabel("Левая кнопка – перемещать изображение | Колесо мыши – зум | Стрелки – сдвиг | Shift – 10px | Ctrl – 50px | Alt (зажать) + навести курсор + клик левой мышью (зажать) – показывает расстояние от точки до курсора"))
         layout.addWidget(self.view)
-        layout.addLayout(zoom_layout)
         layout.addLayout(zoom_layout)
         layout.addWidget(self.info_label)
         layout.addWidget(self.ok_btn)

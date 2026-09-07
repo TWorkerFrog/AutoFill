@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QButtonGroup, QFileDialog, QColorDialog, QMessageBox,
     QTabWidget, QSpinBox, QDialog, QSplitter, QCompleter, QComboBox
 )
-from PySide6.QtGui import QDesktopServices, QFontDatabase, QIntValidator
+from PySide6.QtGui import QDesktopServices, QFontDatabase
 from PySide6.QtWidgets import QFrame
 from PIL import Image, ImageDraw
 
@@ -30,7 +30,7 @@ from ui.message_dialog import MessageDialog
 class DiplomaGenerator(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Генератор грамот")
+        self.setWindowTitle("AutoFill")
         w, h = get_window_size(self, 0.55, 0.75)
         self.resize(w, h)
 
@@ -382,24 +382,6 @@ class DiplomaGenerator(QMainWindow):
             self.font_path = path
             self.font_edit.setText(path)
             self.selected_font_family = ""
-
-    def choose_system_font(self):
-        dialog = FontPickerDialog(
-            self,
-            self.selected_font_family,
-            self.font_size_spin.value(),
-            self.selected_font_style
-        )
-        self.apply_theme_to_dialog(dialog, self.current_theme)
-
-        if dialog.exec() == QDialog.Accepted:
-            family, size, style = dialog.get_selected_font()
-            if family:
-                self.selected_font_family = family
-                self.selected_font_style = style
-                self.font_path = ""
-                self.font_edit.setText(f"[Системный] {family} {style}")
-                self.font_size_spin.setValue(size)
 
     def choose_color(self):
         color = QColorDialog.getColor()

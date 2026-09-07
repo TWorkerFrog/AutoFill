@@ -182,7 +182,7 @@ cython_debug/
 .cursorindexingignore
 
 Trash/
-old/log.txt
+log.txt
 Благодарность организаторам на Подведение итогов года 2025-2026.png
 text.ttf
 surnames.txt
@@ -190,14 +190,13 @@ desktop.ini
 /Грамоты/
 _preview.png
 .idea/
-old/settings.json
+settings.json
 icons/
 build.py
 utils/
-old/resources_rc.py
-old/setup.iss
-old/simple_logger.py
-old/app_log.txt
-old/
+setup.iss
+simple_logger.py
+app_log.txt
+
 
 

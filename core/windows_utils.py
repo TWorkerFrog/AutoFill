@@ -5,13 +5,14 @@ import winreg
 
 
 def get_windows_version():
-    """Возвращает (major, minor) версии Windows."""
     try:
-        version = platform.version()
-        major, minor, build = map(int, version.split(".")[:3])
-        return major, minor
+        parts = platform.version().split(".")
+        major = int(parts[0])
+        minor = int(parts[1]) if len(parts) > 1 else 0
+        build = int(parts[2]) if len(parts) > 2 else 0
+        return major, minor, build
     except:
-        return 10, 0
+        return 10, 0, 0
 
 def is_windows_theme():
     """Проверяет какая тема в Windows."""
@@ -27,17 +28,16 @@ def is_windows_theme():
         return True
 
 def set_title_bar_color(window, color_hex):
-    """Устанавливает цвет заголовка окна."""
     if sys.platform != "win32":
         return False
 
-    major, minor = get_windows_version()
+    major, minor, build = get_windows_version()
 
     # Цвет заголовка поддерживается только в Windows 11 (build 22000+)
     build = int(platform.version().split(".")[2]) if len(platform.version().split(".")) > 2 else 0
 
     if major < 10 or (major == 10 and build < 22000):
-        return False  # Windows 10 и ниже — не поддерживается
+        return False
 
     try:
         hwnd = int(window.winId())
