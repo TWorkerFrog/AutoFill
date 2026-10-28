@@ -18,24 +18,31 @@ QWidget {
 }
 
 QTabWidget::pane {
-    border: 1px solid #3A3A3A;
-    background-color: #222222;
-    border-radius: 8px;
+    border: none;
+    background-color: transparent;
+}
+
+QTabBar {
+    background-color: transparent;
 }
 
 QTabBar::tab {
-    background-color: #2A2A2A;
+    background-color: transparent;
+    color: #9A9A9A;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-right: 4px;
+}
+
+QTabBar::tab:hover {
     color: #F2F2F2;
-    padding: 8px 18px;
-    border: 1px solid #3A3A3A;
-    border-bottom: none;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
 }
 
 QTabBar::tab:selected {
-    background-color: #7F43E3;
+    background-color: transparent;
     color: #F2F2F2;
+    border-bottom: 2px solid #7F43E3;
 }
 
 QPushButton {
@@ -242,19 +249,29 @@ QWidget[theme="light"] {
 }
 
 QTabWidget[theme="light"]::pane {
-    border: 1px solid #CCCCCC;
-    background-color: #F2F2F2;
+    border: none;
+    background-color: transparent;
+}
+
+QTabBar[theme="light"] {
+    background-color: transparent;
 }
 
 QTabBar[theme="light"]::tab {
-    background-color: #E0E0E0;
+    background-color: transparent;
+    color: #666666;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+QTabBar[theme="light"]::tab:hover {
     color: #0D0D0D;
-    border: 1px solid #CCCCCC;
 }
 
 QTabBar[theme="light"]::tab:selected {
-    background-color: #7F43E3;
-    color: #F2F2F2;
+    background-color: transparent;
+    color: #0D0D0D;
+    border-bottom: 2px solid #7F43E3;
 }
 
 QPushButton[theme="light"] {
@@ -421,19 +438,19 @@ QListView[theme="light"]::item:selected {
    ============================================ */
 
 QGroupBox {
-    border: 1px solid #3A3A3A;
-    border-radius: 8px;
-    margin-top: 10px;
-    padding: 12px 8px 8px 8px;
+    border: none;
+    background-color: transparent;
+    margin-top: 16px;
+    padding: 0;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    left: 12px;
-    padding: 0 5px;
-    color: #AD83F3;
-    font-weight: bold;
+    left: 0;
+    padding: 0 0 4px 0;
+    color: #CFCFCF;
+    font-weight: 600;
 }
 
 QPlainTextEdit {
@@ -561,11 +578,57 @@ QPushButton#link_btn {
     color: #AD83F3;
     font-size: 12px;
     font-weight: bold;
-    padding: 2px 4px;
+    padding: 4px 2px;
 }
 
 QPushButton#link_btn:hover {
     color: #F2F2F2;
+}
+
+QToolButton#section_toggle {
+    background-color: transparent;
+    border: none;
+    color: #CFCFCF;
+    font-weight: 600;
+    padding: 4px 0;
+    text-align: left;
+}
+
+QToolButton#section_toggle:hover {
+    color: #F2F2F2;
+}
+
+QPushButton#seg_btn {
+    background-color: transparent;
+    border: 1px solid #3A3A3A;
+    color: #9A9A9A;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+QPushButton#seg_btn:hover {
+    color: #F2F2F2;
+    border-color: #4A4A4A;
+}
+
+QPushButton#seg_btn:checked {
+    background-color: #7F43E3;
+    border-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton#help_btn {
+    background-color: transparent;
+    border: 1px solid #3A3A3A;
+    border-radius: 12px;
+    color: #9A9A9A;
+    font-weight: bold;
+    padding: 0;
+}
+
+QPushButton#help_btn:hover {
+    color: #F2F2F2;
+    border-color: #7F43E3;
 }
 
 QPushButton#tool_btn {
@@ -654,11 +717,12 @@ QRadioButton[theme="light"]::indicator:disabled {
 /* --- светлая тема: дополнительные компоненты --- */
 
 QGroupBox[theme="light"] {
-    border-color: #CCCCCC;
+    border: none;
+    background-color: transparent;
 }
 
 QGroupBox[theme="light"]::title {
-    color: #7F43E3;
+    color: #333333;
 }
 
 QPlainTextEdit[theme="light"] {
@@ -739,6 +803,40 @@ QPushButton#link_btn[theme="light"] {
 
 QPushButton#link_btn[theme="light"]:hover {
     color: #4B1FA8;
+}
+
+QToolButton#section_toggle[theme="light"] {
+    color: #333333;
+}
+
+QToolButton#section_toggle[theme="light"]:hover {
+    color: #0D0D0D;
+}
+
+QPushButton#seg_btn[theme="light"] {
+    border-color: #CCCCCC;
+    color: #666666;
+}
+
+QPushButton#seg_btn[theme="light"]:hover {
+    border-color: #AAAAAA;
+    color: #0D0D0D;
+}
+
+QPushButton#seg_btn[theme="light"]:checked {
+    background-color: #7F43E3;
+    border-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QPushButton#help_btn[theme="light"] {
+    border-color: #CCCCCC;
+    color: #666666;
+}
+
+QPushButton#help_btn[theme="light"]:hover {
+    border-color: #7F43E3;
+    color: #0D0D0D;
 }
 
 QPushButton#tool_btn[theme="light"] {

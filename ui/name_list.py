@@ -31,6 +31,7 @@ class NameListEditor(QWidget):
         *,
         show_load: bool = False,
         show_clear: bool = True,
+        show_header: bool = True,
         search_placeholder: str = "Поиск по списку...",
     ):
         super().__init__(parent)
@@ -49,7 +50,11 @@ class NameListEditor(QWidget):
         self.count_label = QLabel("0")
         self.count_label.setObjectName("secondary_label")
         header.addWidget(self.count_label)
-        layout.addLayout(header)
+        if show_header:
+            layout.addLayout(header)
+        else:
+            self.title_label.hide()
+            self.count_label.hide()
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText(search_placeholder)
@@ -76,10 +81,12 @@ class NameListEditor(QWidget):
         buttons = QHBoxLayout()
         self.buttons_layout = buttons
         self.load_button = QPushButton("Загрузить файл")
+        self.load_button.setObjectName("link_btn")
         self.load_button.setVisible(show_load)
         buttons.addWidget(self.load_button)
 
         self.clear_button = QPushButton("Очистить")
+        self.clear_button.setObjectName("link_btn")
         self.clear_button.setVisible(show_clear)
         self.clear_button.clicked.connect(self.clear)
         buttons.addWidget(self.clear_button)

@@ -54,6 +54,7 @@ from core.settings import AppSettings, SettingsStore
 from core.text_render import check_text_bounds
 from core.version import __version__
 from core.windows_utils import is_windows_theme, set_title_bar_color, set_title_bar_light_theme
+from ui.collapsible import CollapsibleSection
 from ui.message_dialog import MessageDialog
 from ui.name_list import NameListEditor
 from ui.point_picker import PointPickerDialog
@@ -173,6 +174,7 @@ class DiplomaGenerator(QMainWindow):
         bottom_layout.addWidget(self.cancel_btn)
 
         self.open_dir_btn = QPushButton("Открыть папку")
+        self.open_dir_btn.setObjectName("link_btn")
         self.open_dir_btn.setVisible(False)
         self.open_dir_btn.clicked.connect(self.open_output_dir)
         bottom_layout.addWidget(self.open_dir_btn)
@@ -249,6 +251,7 @@ class DiplomaGenerator(QMainWindow):
         self.template_edit.textChanged.connect(self._on_template_changed)
         template_layout.addWidget(self.template_edit, 1)
         btn_template = QPushButton("Выбрать")
+        btn_template.setObjectName("link_btn")
         btn_template.clicked.connect(self.choose_template)
         template_layout.addWidget(btn_template)
         grid.addRow("Шаблон:", template_row)
@@ -269,6 +272,7 @@ class DiplomaGenerator(QMainWindow):
         font_layout.addWidget(self.style_combo)
 
         btn_font_file = QPushButton("Файл")
+        btn_font_file.setObjectName("link_btn")
         btn_font_file.clicked.connect(self.choose_font_file)
         font_layout.addWidget(btn_font_file)
         grid.addRow("Шрифт:", font_row)
@@ -308,7 +312,7 @@ class DiplomaGenerator(QMainWindow):
         self.letter_spacing_spin.setSuffix(" px")
         style_layout.addWidget(self.letter_spacing_spin)
         style_layout.addStretch()
-        grid.addRow(style_row)
+        grid.addRow("", style_row)
         layout.addWidget(source_group)
 
         self.names_editor = NameListEditor(
@@ -323,8 +327,10 @@ class DiplomaGenerator(QMainWindow):
             "Исключения (не влезли в границы или пропущены)",
             "Иванов Иван Иванович",
             show_load=False,
+            show_header=False,
         )
         move_button = QPushButton("Перенести в основной список")
+        move_button.setObjectName("link_btn")
         move_button.clicked.connect(self.move_excluded_to_main)
         self.excluded_editor.buttons_layout.addWidget(move_button)
 
@@ -332,11 +338,15 @@ class DiplomaGenerator(QMainWindow):
         self.ask_before_move.setChecked(True)
         self.excluded_editor.layout().addWidget(self.ask_before_move)
 
+        self.excluded_section = CollapsibleSection("Исключения", self.excluded_editor)
+        self.excluded_section.setVisible(False)
+
         self.names_splitter = QSplitter(Qt.Vertical)
         self.names_splitter.addWidget(self.names_editor)
-        self.names_splitter.addWidget(self.excluded_editor)
-        self.names_splitter.setSizes([390, 210])
+        self.names_splitter.addWidget(self.excluded_section)
+        self.names_splitter.setSizes([390, 0])
         self.names_splitter.setChildrenCollapsible(False)
+        self.excluded_editor.countChanged.connect(self._on_excluded_count_changed)
         layout.addWidget(self.names_splitter, 1)
 
     def build_tab_position(self) -> None:
@@ -414,9 +424,11 @@ class DiplomaGenerator(QMainWindow):
 
         buttons = QHBoxLayout()
         pick_btn = QPushButton("Указать точку на грамоте")
+        pick_btn.setObjectName("secondary_btn")
         pick_btn.clicked.connect(self.pick_position)
         buttons.addWidget(pick_btn)
         reset_btn = QPushButton("Сбросить позицию")
+        reset_btn.setObjectName("link_btn")
         reset_btn.clicked.connect(self.reset_position)
         buttons.addWidget(reset_btn)
         buttons.addStretch()
@@ -513,6 +525,7 @@ class DiplomaGenerator(QMainWindow):
         self.output_dir_edit = QLineEdit(self._default_output_dir())
         dir_row.addWidget(self.output_dir_edit, 1)
         browse_btn = QPushButton("Обзор")
+        browse_btn.setObjectName("link_btn")
         browse_btn.clicked.connect(self.choose_output_dir)
         dir_row.addWidget(browse_btn)
         output_layout.addLayout(dir_row)
@@ -576,9 +589,11 @@ class DiplomaGenerator(QMainWindow):
         about_layout.addWidget(QLabel("Polyform Noncommercial License 1.0.0"))
         buttons = QHBoxLayout()
         help_btn = QPushButton("Инструкция")
+        help_btn.setObjectName("link_btn")
         help_btn.clicked.connect(self.show_help)
         buttons.addWidget(help_btn)
         license_btn = QPushButton("Лицензия")
+        license_btn.setObjectName("link_btn")
         license_btn.clicked.connect(self.show_license)
         buttons.addWidget(license_btn)
         buttons.addStretch()
@@ -592,6 +607,7 @@ class DiplomaGenerator(QMainWindow):
         path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         path_layout.addWidget(path_label)
         save_btn = QPushButton("Сохранить настройки сейчас")
+        save_btn.setObjectName("link_btn")
         save_btn.clicked.connect(self.save_settings)
         path_layout.addWidget(save_btn)
         layout.addWidget(path_group)
@@ -1181,6 +1197,20 @@ class DiplomaGenerator(QMainWindow):
 
     def _on_names_changed(self) -> None:
         self._update_generate_button()
+
+    def _on_excluded_count_changed(self, count: int) -> None:
+        count = max(0, int(count))
+        self.excluded_section.set_title(f"Исключения ({count})" if count else "Исключения")
+        if not count:
+            self.excluded_section.setVisible(False)
+            self.names_splitter.setSizes([1, 0])
+            return
+        if not self.excluded_section.isHidden():
+            return
+        self.excluded_section.set_expanded(True)
+        self.excluded_section.setVisible(True)
+        total = sum(self.names_splitter.sizes()) or self.names_splitter.height() or 600
+        self.names_splitter.setSizes([max(300, total - 220), 220])
 
     def _update_generate_button(self) -> None:
         count = self.names_editor.count()

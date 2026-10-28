@@ -9,7 +9,8 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
+    QButtonGroup,
+    QCheckBox,
     QDialog,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
@@ -153,37 +154,54 @@ class PointPickerDialog(QDialog):
         self.info_label = QLabel()
         self.info_label.setAlignment(Qt.AlignCenter)
 
-        self.align_combo = QComboBox()
-        self.align_combo.setObjectName("align_combo")
-        self.align_combo.setMinimumWidth(150)
-        self.align_combo.addItem("По левому краю", "left")
-        self.align_combo.addItem("По центру", "center")
-        self.align_combo.addItem("По правому краю", "right")
-        align_index = self.align_combo.findData(self.align)
-        if align_index >= 0:
-            self.align_combo.setCurrentIndex(align_index)
+        self.align_group = QButtonGroup(self)
+        self.align_buttons: dict[str, QPushButton] = {}
+        for value, label in (
+            ("left", "Слева"),
+            ("center", "Центр"),
+            ("right", "Справа"),
+        ):
+            button = QPushButton(label)
+            button.setObjectName("seg_btn")
+            button.setCheckable(True)
+            button.setAutoDefault(False)
+            button.clicked.connect(
+                lambda _checked=False, align=value: self.on_align_changed(align)
+            )
+            self.align_group.addButton(button)
+            self.align_buttons[value] = button
+            if value == self.align:
+                button.setChecked(True)
+        if not any(button.isChecked() for button in self.align_buttons.values()):
+            self.align = "center"
+            self.align_buttons["center"].setChecked(True)
 
         zoom_layout = QHBoxLayout()
         btn_zoom_in = QPushButton("+")
+        btn_zoom_in.setObjectName("tool_btn")
         btn_zoom_in.setFixedWidth(40)
         btn_zoom_in.clicked.connect(self.zoom_in)
         zoom_layout.addWidget(btn_zoom_in)
 
         btn_zoom_out = QPushButton("−")
+        btn_zoom_out.setObjectName("tool_btn")
         btn_zoom_out.setFixedWidth(40)
         btn_zoom_out.clicked.connect(self.zoom_out)
         zoom_layout.addWidget(btn_zoom_out)
 
         btn_fit = QPushButton("По размеру")
+        btn_fit.setObjectName("tool_btn")
         btn_fit.clicked.connect(self.fit_to_view)
         zoom_layout.addWidget(btn_fit)
 
         btn_center = QPushButton("В центр")
+        btn_center.setObjectName("tool_btn")
         btn_center.clicked.connect(self.center_marker)
         zoom_layout.addWidget(btn_center)
         zoom_layout.addSpacing(12)
         zoom_layout.addWidget(QLabel("Выравнивание:"))
-        zoom_layout.addWidget(self.align_combo)
+        for button in self.align_buttons.values():
+            zoom_layout.addWidget(button)
         zoom_layout.addStretch()
 
         self.ok_btn = QPushButton("Готово")
@@ -194,19 +212,30 @@ class PointPickerDialog(QDialog):
         self.ok_btn.clicked.connect(self.accept)
 
         layout = QVBoxLayout()
+        hint_row = QHBoxLayout()
         self.hint_label = QLabel(self._align_hint())
         self.hint_label.setWordWrap(True)
-        layout.addWidget(self.hint_label)
-        self.align_combo.currentIndexChanged.connect(self.on_align_changed)
-        help_label = QLabel(
-            "Красная пунктирная рамка — safe area. Текст рисуется в текущем шрифте и цвете. "
-            "Левая кнопка — перемещать изображение | Колесо — зум | "
-            "Стрелки — сдвиг | Shift — 10 px | Ctrl — 50 px | "
-            "Alt + движение мыши — расстояние до точки"
+        hint_row.addWidget(self.hint_label, 1)
+
+        self.safe_check = QCheckBox("Safe area")
+        self.safe_check.setObjectName("safe_area_check")
+        self.safe_check.setChecked(self.safe_margin > 0)
+        self.safe_check.setEnabled(self.safe_margin > 0)
+        self.safe_check.toggled.connect(self._on_safe_area_toggled)
+        hint_row.addWidget(self.safe_check)
+
+        help_btn = QPushButton("?")
+        help_btn.setObjectName("help_btn")
+        help_btn.setFixedSize(24, 24)
+        help_btn.setToolTip(
+            "Красная пунктирная рамка — safe area.\n"
+            "Левая кнопка — перемещать изображение.\n"
+            "Правая кнопка — поставить точку.\n"
+            "Колесо — зум; стрелки — сдвиг; Shift — 10 px; Ctrl — 50 px.\n"
+            "Alt + движение мыши — расстояние до точки."
         )
-        help_label.setWordWrap(True)
-        help_label.setObjectName("hint_label")
-        layout.addWidget(help_label)
+        hint_row.addWidget(help_btn)
+        layout.addLayout(hint_row)
         layout.addWidget(self.view)
         layout.addLayout(zoom_layout)
         layout.addWidget(self.info_label)
@@ -234,13 +263,22 @@ class PointPickerDialog(QDialog):
             return "Правая кнопка мыши — поставить точку (правый край блока)"
         return "Правая кнопка мыши — поставить точку (центр блока)"
 
-    def on_align_changed(self, _index: int = 0) -> None:
-        align = self.align_combo.currentData()
+    def on_align_changed(self, align: str | None = None) -> None:
+        if align is None:
+            align = next(
+                (value for value, button in self.align_buttons.items() if button.isChecked()),
+                None,
+            )
         if align not in {"left", "center", "right"}:
             return
         self.align = align
+        for value, button in self.align_buttons.items():
+            button.setChecked(value == align)
         self.hint_label.setText(self._align_hint())
         self.draw_marker()
+
+    def _on_safe_area_toggled(self, checked: bool) -> None:
+        set_safe_area_visible(self.safe_area_items, checked and self.safe_margin > 0)
 
     def get_align(self) -> str:
         return self.align

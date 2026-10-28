@@ -11,8 +11,8 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsScene
 
-SAFE_AREA_COLOR = QColor("#E5484D")
-SAFE_AREA_UNDERLAY = QColor(255, 255, 255, 190)
+SAFE_AREA_COLOR = QColor("#C05A5A")
+SAFE_AREA_UNDERLAY = QColor(255, 255, 255, 150)
 
 
 def safe_area_rect(width: int, height: int, margin: int) -> QRectF | None:
@@ -48,7 +48,7 @@ def add_safe_area(
 
     underlay = QGraphicsRectItem(rect)
     underlay_pen = QPen(SAFE_AREA_UNDERLAY)
-    underlay_pen.setWidthF(3.5)
+    underlay_pen.setWidthF(3.0)
     underlay_pen.setCosmetic(True)
     underlay.setPen(underlay_pen)
     underlay.setBrush(Qt.NoBrush)
@@ -58,10 +58,10 @@ def add_safe_area(
 
     line = QGraphicsRectItem(rect)
     line_pen = QPen(SAFE_AREA_COLOR)
-    line_pen.setWidthF(1.5)
+    line_pen.setWidthF(1.2)
     line_pen.setCosmetic(True)
     line_pen.setStyle(Qt.DashLine)
-    line_pen.setDashPattern([5.0, 4.0])
+    line_pen.setDashPattern([4.0, 4.0])
     line.setPen(line_pen)
     line.setBrush(Qt.NoBrush)
     line.setAcceptedMouseButtons(Qt.NoButton)
