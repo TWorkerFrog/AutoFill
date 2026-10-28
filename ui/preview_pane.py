@@ -28,14 +28,14 @@ class PreviewPane(QFrame):
 
         header = QHBoxLayout()
         header.setSpacing(6)
-        title = QLabel("Предпросмотр")
+        title = QLabel("Живой предпросмотр")
         title.setObjectName("preview_title")
         header.addWidget(title)
         header.addStretch()
 
-        self.open_button = QPushButton("Открыть")
+        self.open_button = QPushButton("Редактировать")
         self.open_button.setObjectName("link_btn")
-        self.open_button.setToolTip("Открыть предпросмотр")
+        self.open_button.setToolTip("Открыть редактор грамоты")
         self.open_button.setAutoDefault(False)
         self.open_button.clicked.connect(self.openRequested)
         header.addWidget(self.open_button)
@@ -56,7 +56,7 @@ class PreviewPane(QFrame):
         canvas_layout.addWidget(self.image_label)
         layout.addWidget(self.canvas, 1)
 
-        self.hint_label = QLabel("Двойной клик — открыть предпросмотр")
+        self.hint_label = QLabel("Двойной клик — открыть редактор")
         self.hint_label.setObjectName("hint_label")
         self.hint_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hint_label)

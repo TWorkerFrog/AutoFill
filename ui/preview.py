@@ -51,12 +51,14 @@ class PreviewDialog(QDialog):
 
         toolbar = QHBoxLayout()
         toolbar.setSpacing(4)
-        self.safe_check = QCheckBox("Safe area")
+        self.safe_check = QCheckBox("Показывать поля")
         self.safe_check.setObjectName("safe_area_check")
-        self.safe_check.setToolTip("Показать границы safe area (не влияет на результат)")
+        self.safe_check.setToolTip(
+            "Показать границы полей для печати (не влияет на результат)"
+        )
         self.safe_check.setEnabled(self._margin > 0)
         if self._margin <= 0:
-            self.safe_check.setToolTip("Safe area не задана: отступ равен 0 px")
+            self.safe_check.setToolTip("Поля для печати не заданы: отступ равен 0 px")
         toolbar.addWidget(self.safe_check)
         toolbar.addStretch()
 

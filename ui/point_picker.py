@@ -11,7 +11,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
+    QColorDialog,
     QDialog,
+    QFrame,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsPixmapItem,
@@ -20,7 +22,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.generator import RenderConfig, render_page
@@ -35,6 +39,8 @@ PREVIEW_MAX_SIDE = 3000
 
 
 class PointPickerDialog(QDialog):
+    """Редактор грамоты: положение, размер, цвет и поля для печати."""
+
     def __init__(
         self,
         image_path,
@@ -47,10 +53,11 @@ class PointPickerDialog(QDialog):
         safe_margin: int | None = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Укажи точку")
+        self.setWindowTitle("Редактор грамоты")
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
         self.align = align
+        self.point_changed = False
         self.render_config = render_config
         self.preview_parts = list(preview_parts or [])
         if safe_margin is None and render_config is not None:
@@ -88,28 +95,32 @@ class PointPickerDialog(QDialog):
         else:
             self.preview_base_image = self.base_image
 
+        self.text_color = tuple(
+            render_config.text_color if render_config is not None else (0, 0, 0)
+        )
+        self.letter_spacing = int(
+            render_config.letter_spacing if render_config is not None else 0
+        )
         self.preview_config = self._scaled_render_config(
             self.render_config,
             self.display_scale,
         )
         self.preview_font = None
         if self.preview_config is not None and self.preview_parts:
-            try:
-                self.preview_font = ImageFont.truetype(
-                    self.preview_config.font_path,
-                    size=self.preview_config.font_size,
-                )
-            except (OSError, ValueError):
-                self.preview_font = None
+            self.preview_font = self._load_preview_font(self.preview_config)
 
         self.pixmap = self._pil_to_pixmap(self.preview_base_image)
 
         self.scene = QGraphicsScene(self)
         self.view = QGraphicsView(self.scene)
+        self.view.setObjectName("editor_view")
         self.view.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self.view.setFocusPolicy(Qt.StrongFocus)
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setMouseTracking(True)
+        self.view.setFrameShape(QFrame.NoFrame)
+        self.view.setStyleSheet("QGraphicsView { background: transparent; border: none; }")
+        self.view.viewport().setAutoFillBackground(False)
 
         self.pixmap_item = QGraphicsPixmapItem(self.pixmap)
         self.pixmap_item.setTransformationMode(Qt.SmoothTransformation)
@@ -126,8 +137,30 @@ class PointPickerDialog(QDialog):
         )
         set_safe_area_visible(self.safe_area_items, self.safe_margin > 0)
 
-        w, h = get_window_size(self, 0.7, 0.75)
-        self.resize(max(680, w), max(480, h))
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(60)
+        self._preview_timer.timeout.connect(self._render_preview)
+
+        self.marker_pen = QPen(QColor("#8B5CF6"))
+        self.marker_pen.setWidth(3)
+        self.marker_pen.setCosmetic(True)
+        self.marker_lines = []
+
+        self.info_label = QLabel()
+        self.info_label.setObjectName("editor_info")
+        self.info_label.setAlignment(Qt.AlignCenter)
+
+        self.hint_label = QLabel(self._align_hint())
+        self.hint_label.setObjectName("hint_label")
+        self.hint_label.setWordWrap(True)
+
+        self._build_ui()
+        self._apply_theme_to_children()
+
+        w, h = get_window_size(self, 0.78, 0.82)
+        self.resize(max(1040, w), max(700, h))
+        self.setMinimumSize(900, 600)
         if parent:
             screen = parent.screen() or QApplication.primaryScreen()
             if screen is not None:
@@ -141,18 +174,197 @@ class PointPickerDialog(QDialog):
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
 
-        self.marker_pen = QPen(QColor("#7F43E3"))
-        self.marker_pen.setWidth(3)
-        self.marker_pen.setCosmetic(True)
-        self.marker_lines = []
+        self.view.mousePressEvent = self.on_mouse_press
+        self.view.keyPressEvent = self.on_key_press
+        self.view.wheelEvent = self.on_wheel
+        self.view.mouseMoveEvent = self.on_mouse_move
 
-        self._preview_timer = QTimer(self)
-        self._preview_timer.setSingleShot(True)
-        self._preview_timer.setInterval(60)
-        self._preview_timer.timeout.connect(self._render_preview)
+        self.draw_marker()
+        self._render_preview()
+        self.view.setFocus()
 
-        self.info_label = QLabel()
-        self.info_label.setAlignment(Qt.AlignCenter)
+    # ------------------------------------------------------------------
+    # Построение интерфейса
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 18, 20, 16)
+        root.setSpacing(14)
+
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        title = QLabel("Редактор грамоты")
+        title.setObjectName("dialog_title")
+        header.addWidget(title)
+        meta = QLabel(f"{self.img_width} × {self.img_height} px")
+        meta.setObjectName("dialog_meta")
+        header.addWidget(meta)
+        header.addStretch()
+
+        self.help_btn = QPushButton("?")
+        self.help_btn.setObjectName("help_btn")
+        self.help_btn.setFixedSize(26, 26)
+        self.help_btn.setToolTip(
+            "Правый клик — поставить точку.\n"
+            "Левая кнопка — перемещать изображение.\n"
+            "Колесо — зум; стрелки — сдвиг; Shift — 10 px; Ctrl — 50 px.\n"
+            "Alt + движение мыши — расстояние до точки.\n"
+            "Поля для печати — отступ, за который не должен выходить текст."
+        )
+        header.addWidget(self.help_btn)
+        root.addLayout(header)
+
+        body = QHBoxLayout()
+        body.setSpacing(14)
+
+        canvas = QFrame()
+        canvas.setObjectName("editor_canvas")
+        canvas_layout = QVBoxLayout(canvas)
+        canvas_layout.setContentsMargins(12, 12, 12, 12)
+        canvas_layout.setSpacing(10)
+        canvas_layout.addWidget(self.view, 1)
+        canvas_layout.addLayout(self._build_zoom_bar())
+        canvas_layout.addWidget(self.info_label)
+        body.addWidget(canvas, 1)
+
+        inspector = QFrame()
+        inspector.setObjectName("inspector")
+        inspector.setFixedWidth(286)
+        inspector_layout = QVBoxLayout(inspector)
+        inspector_layout.setContentsMargins(16, 16, 16, 16)
+        inspector_layout.setSpacing(10)
+
+        inspector_layout.addWidget(self._heading("Текст"))
+        inspector_layout.addLayout(
+            self._field_row("Размер", self._build_font_size_spin())
+        )
+        inspector_layout.addLayout(
+            self._field_row("Цвет", self._build_color_row())
+        )
+        inspector_layout.addLayout(
+            self._field_row("Интервал", self._build_letter_spacing_spin())
+        )
+
+        inspector_layout.addSpacing(6)
+        inspector_layout.addWidget(self._heading("Положение"))
+        inspector_layout.addWidget(self._build_align_segments())
+        inspector_layout.addWidget(self.hint_label)
+
+        inspector_layout.addSpacing(6)
+        inspector_layout.addWidget(self._heading("Печать"))
+        inspector_layout.addLayout(self._build_margin_row())
+        self.safe_check = QCheckBox("Показывать поля")
+        self.safe_check.setObjectName("safe_area_check")
+        self.safe_check.setChecked(self.safe_margin > 0)
+        self.safe_check.setToolTip(
+            "Показывает границу полей для печати. Текст не должен выходить за неё."
+        )
+        self.safe_check.toggled.connect(self._on_safe_area_toggled)
+        inspector_layout.addWidget(self.safe_check)
+
+        inspector_layout.addStretch()
+        note = QLabel("Правый клик по грамоте ставит точку привязки текста.")
+        note.setObjectName("hint_label")
+        note.setWordWrap(True)
+        inspector_layout.addWidget(note)
+        body.addWidget(inspector)
+
+        root.addLayout(body, 1)
+
+        footer = QFrame()
+        footer.setObjectName("dialog_footer")
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(0, 12, 0, 0)
+        footer_layout.setSpacing(8)
+
+        self.reset_btn = QPushButton("Сбросить оформление")
+        self.reset_btn.setObjectName("link_btn")
+        self.reset_btn.setAutoDefault(False)
+        self.reset_btn.clicked.connect(self.reset_style)
+        footer_layout.addWidget(self.reset_btn)
+        footer_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Отмена")
+        self.cancel_btn.setObjectName("tertiary_btn")
+        self.cancel_btn.setAutoDefault(False)
+        self.cancel_btn.clicked.connect(self.reject)
+        footer_layout.addWidget(self.cancel_btn)
+
+        self.ok_btn = QPushButton("Применить")
+        self.ok_btn.setObjectName("primary_btn")
+        self.ok_btn.setMinimumWidth(160)
+        self.ok_btn.setMinimumHeight(38)
+        self.ok_btn.setDefault(True)
+        self.ok_btn.setAutoDefault(True)
+        self.ok_btn.clicked.connect(self.accept)
+        footer_layout.addWidget(self.ok_btn)
+
+        root.addWidget(footer)
+
+    @staticmethod
+    def _heading(text: str) -> QLabel:
+        label = QLabel(text.upper())
+        label.setObjectName("inspector_heading")
+        return label
+
+    @staticmethod
+    def _field_row(label_text: str, widget: QWidget) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        label = QLabel(label_text)
+        label.setObjectName("field_label")
+        label.setMinimumWidth(70)
+        row.addWidget(label)
+        row.addWidget(widget, 1)
+        return row
+
+    def _build_font_size_spin(self) -> QSpinBox:
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(1, 2000)
+        self.font_size_spin.setSuffix(" px")
+        self.font_size_spin.setValue(
+            self.render_config.font_size if self.render_config is not None else 100
+        )
+        self.font_size_spin.setEnabled(self.render_config is not None)
+        self.font_size_spin.valueChanged.connect(self._on_font_size_changed)
+        return self.font_size_spin
+
+    def _build_letter_spacing_spin(self) -> QSpinBox:
+        self.letter_spacing_spin = QSpinBox()
+        self.letter_spacing_spin.setRange(-20, 200)
+        self.letter_spacing_spin.setSuffix(" px")
+        self.letter_spacing_spin.setValue(self.letter_spacing)
+        self.letter_spacing_spin.setEnabled(self.render_config is not None)
+        self.letter_spacing_spin.valueChanged.connect(self._on_letter_spacing_changed)
+        return self.letter_spacing_spin
+
+    def _build_color_row(self) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.color_button = QPushButton()
+        self.color_button.setObjectName("color_swatch")
+        self.color_button.setFixedSize(34, 34)
+        self.color_button.setToolTip("Выбрать цвет текста")
+        self.color_button.setEnabled(self.render_config is not None)
+        self.color_button.clicked.connect(self.choose_color)
+        layout.addWidget(self.color_button)
+
+        self.color_label = QLabel()
+        self.color_label.setObjectName("secondary_label")
+        layout.addWidget(self.color_label)
+        layout.addStretch()
+        self._set_color_button(self.text_color)
+        return row
+
+    def _build_align_segments(self) -> QWidget:
+        wrapper = QFrame()
+        wrapper.setObjectName("segmented")
+        layout = QHBoxLayout(wrapper)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
 
         self.align_group = QButtonGroup(self)
         self.align_buttons: dict[str, QPushButton] = {}
@@ -170,24 +382,31 @@ class PointPickerDialog(QDialog):
             )
             self.align_group.addButton(button)
             self.align_buttons[value] = button
+            layout.addWidget(button, 1)
             if value == self.align:
                 button.setChecked(True)
         if not any(button.isChecked() for button in self.align_buttons.values()):
             self.align = "center"
             self.align_buttons["center"].setChecked(True)
+        return wrapper
 
+    def _build_zoom_bar(self) -> QHBoxLayout:
         zoom_layout = QHBoxLayout()
-        btn_zoom_in = QPushButton("+")
-        btn_zoom_in.setObjectName("tool_btn")
-        btn_zoom_in.setFixedWidth(40)
-        btn_zoom_in.clicked.connect(self.zoom_in)
-        zoom_layout.addWidget(btn_zoom_in)
+        zoom_layout.setSpacing(4)
 
         btn_zoom_out = QPushButton("−")
         btn_zoom_out.setObjectName("tool_btn")
-        btn_zoom_out.setFixedWidth(40)
+        btn_zoom_out.setFixedWidth(34)
+        btn_zoom_out.setToolTip("Уменьшить")
         btn_zoom_out.clicked.connect(self.zoom_out)
         zoom_layout.addWidget(btn_zoom_out)
+
+        btn_zoom_in = QPushButton("+")
+        btn_zoom_in.setObjectName("tool_btn")
+        btn_zoom_in.setFixedWidth(34)
+        btn_zoom_in.setToolTip("Увеличить")
+        btn_zoom_in.clicked.connect(self.zoom_in)
+        zoom_layout.addWidget(btn_zoom_in)
 
         btn_fit = QPushButton("По размеру")
         btn_fit.setObjectName("tool_btn")
@@ -198,59 +417,137 @@ class PointPickerDialog(QDialog):
         btn_center.setObjectName("tool_btn")
         btn_center.clicked.connect(self.center_marker)
         zoom_layout.addWidget(btn_center)
-        zoom_layout.addSpacing(12)
-        zoom_layout.addWidget(QLabel("Выравнивание:"))
-        for button in self.align_buttons.values():
-            zoom_layout.addWidget(button)
         zoom_layout.addStretch()
+        return zoom_layout
 
-        self.ok_btn = QPushButton("Готово")
-        self.ok_btn.setObjectName("primary_btn")
-        self.ok_btn.setMinimumHeight(40)
-        self.ok_btn.setDefault(True)
-        self.ok_btn.setAutoDefault(True)
-        self.ok_btn.clicked.connect(self.accept)
-
-        layout = QVBoxLayout()
-        hint_row = QHBoxLayout()
-        self.hint_label = QLabel(self._align_hint())
-        self.hint_label.setWordWrap(True)
-        hint_row.addWidget(self.hint_label, 1)
-
-        self.safe_check = QCheckBox("Safe area")
-        self.safe_check.setObjectName("safe_area_check")
-        self.safe_check.setChecked(self.safe_margin > 0)
-        self.safe_check.setEnabled(self.safe_margin > 0)
-        self.safe_check.toggled.connect(self._on_safe_area_toggled)
-        hint_row.addWidget(self.safe_check)
-
-        help_btn = QPushButton("?")
-        help_btn.setObjectName("help_btn")
-        help_btn.setFixedSize(24, 24)
-        help_btn.setToolTip(
-            "Красная пунктирная рамка — safe area.\n"
-            "Левая кнопка — перемещать изображение.\n"
-            "Правая кнопка — поставить точку.\n"
-            "Колесо — зум; стрелки — сдвиг; Shift — 10 px; Ctrl — 50 px.\n"
-            "Alt + движение мыши — расстояние до точки."
+    def _build_margin_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        label = QLabel("Поля")
+        label.setObjectName("field_label")
+        label.setMinimumWidth(70)
+        row.addWidget(label)
+        self.margin_spin = QSpinBox()
+        self.margin_spin.setRange(0, 100000)
+        self.margin_spin.setSuffix(" px")
+        self.margin_spin.setValue(self.safe_margin)
+        self.margin_spin.setToolTip(
+            "Отступ от краёв, за который не должен выходить текст при печати. 0 — без ограничения."
         )
-        hint_row.addWidget(help_btn)
-        layout.addLayout(hint_row)
-        layout.addWidget(self.view)
-        layout.addLayout(zoom_layout)
-        layout.addWidget(self.info_label)
-        layout.addWidget(self.ok_btn)
-        self.setLayout(layout)
+        self.margin_spin.valueChanged.connect(self._on_margin_changed)
+        row.addWidget(self.margin_spin, 1)
+        return row
 
-        self.view.mousePressEvent = self.on_mouse_press
-        self.view.keyPressEvent = self.on_key_press
-        self.view.wheelEvent = self.on_wheel
-        self.view.mouseMoveEvent = self.on_mouse_move
+    def _apply_theme_to_children(self) -> None:
+        theme = self.property("theme")
+        if not theme:
+            return
+        for widget in self.findChildren(QWidget):
+            widget.setProperty("theme", theme)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
 
-        self.draw_marker()
-        self._render_preview()
-        self.view.setFocus()
+    # ------------------------------------------------------------------
+    # Оформление текста
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _load_preview_font(config: RenderConfig | None):
+        if config is None:
+            return None
+        try:
+            return ImageFont.truetype(config.font_path, size=config.font_size)
+        except (OSError, ValueError):
+            return None
 
+    def _refresh_render_config(self) -> None:
+        if self.render_config is None:
+            return
+        self.render_config = replace(
+            self.render_config,
+            font_size=self.font_size_spin.value(),
+            text_color=tuple(self.text_color),
+            letter_spacing=self.letter_spacing_spin.value(),
+            margin=self.safe_margin,
+        )
+        self.preview_config = self._scaled_render_config(
+            self.render_config,
+            self.display_scale,
+        )
+        self.preview_font = self._load_preview_font(self.preview_config)
+        self._schedule_preview()
+
+    def _on_font_size_changed(self, _value: int) -> None:
+        self._refresh_render_config()
+
+    def _on_letter_spacing_changed(self, _value: int) -> None:
+        self.letter_spacing = self.letter_spacing_spin.value()
+        self._refresh_render_config()
+
+    def _on_margin_changed(self, value: int) -> None:
+        self.safe_margin = max(0, int(value))
+        self._rebuild_safe_area()
+        self._refresh_render_config()
+
+    def _set_color_button(self, color: tuple[int, int, int]) -> None:
+        value = QColor(*color).name()
+        self.color_button.setStyleSheet(f"background-color: {value};")
+        self.color_label.setText(value.upper())
+
+    def choose_color(self) -> None:
+        if self.render_config is None:
+            return
+        color = QColorDialog.getColor(
+            QColor(*self.text_color),
+            self,
+            "Цвет текста",
+            QColorDialog.DontUseNativeDialog,
+        )
+        if not color.isValid():
+            return
+        self.text_color = (color.red(), color.green(), color.blue())
+        self._set_color_button(self.text_color)
+        self._refresh_render_config()
+
+    def reset_style(self) -> None:
+        if self.render_config is None:
+            return
+        self.font_size_spin.setValue(100)
+        self.letter_spacing_spin.setValue(0)
+        self.text_color = (0, 0, 0)
+        self._set_color_button(self.text_color)
+        self.margin_spin.setValue(36)
+        self._refresh_render_config()
+
+    def _rebuild_safe_area(self) -> None:
+        for item in self.safe_area_items:
+            self.scene.removeItem(item)
+        self.safe_area_items = add_safe_area(
+            self.scene,
+            self.img_width,
+            self.img_height,
+            self.safe_margin,
+            z=10,
+        )
+        set_safe_area_visible(
+            self.safe_area_items,
+            self.safe_check.isChecked() and self.safe_margin > 0,
+        )
+
+    def get_text_color(self) -> tuple[int, int, int]:
+        return tuple(self.text_color)
+
+    def get_font_size(self) -> int:
+        return self.font_size_spin.value()
+
+    def get_letter_spacing(self) -> int:
+        return self.letter_spacing_spin.value()
+
+    def get_margin(self) -> int:
+        return self.safe_margin
+
+    # ------------------------------------------------------------------
+    # Сцена и предпросмотр
+    # ------------------------------------------------------------------
     def showEvent(self, event):
         super().showEvent(event)
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
@@ -258,10 +555,10 @@ class PointPickerDialog(QDialog):
 
     def _align_hint(self) -> str:
         if self.align == "left":
-            return "Правая кнопка мыши — поставить точку (левый край блока)"
+            return "Правый клик — поставить точку (левый край блока)"
         if self.align == "right":
-            return "Правая кнопка мыши — поставить точку (правый край блока)"
-        return "Правая кнопка мыши — поставить точку (центр блока)"
+            return "Правый клик — поставить точку (правый край блока)"
+        return "Правый клик — поставить точку (центр блока)"
 
     def on_align_changed(self, align: str | None = None) -> None:
         if align is None:
@@ -338,11 +635,12 @@ class PointPickerDialog(QDialog):
             try:
                 image = render_page(image, self.preview_parts, self.preview_font, config)
             except Exception:
-                log.debug("Не удалось нарисовать предпросмотр в выборе точки", exc_info=True)
+                log.debug("Не удалось нарисовать предпросмотр в редакторе", exc_info=True)
                 image = self.preview_base_image.copy()
         self.pixmap_item.setPixmap(self._pil_to_pixmap(image))
 
     def center_marker(self) -> None:
+        self.point_changed = True
         self.marker_x = self.img_width // 2
         self.marker_y = self.img_height // 2
         self.draw_marker()
@@ -367,6 +665,7 @@ class PointPickerDialog(QDialog):
         else:
             QGraphicsView.keyPressEvent(self.view, event)
             return
+        self.point_changed = True
         self._clamp_marker()
         self.draw_marker()
 
@@ -416,13 +715,23 @@ class PointPickerDialog(QDialog):
         size = 20
         self.marker_pen.setCosmetic(True)
 
-        line1 = QGraphicsLineItem(self.marker_x - size, self.marker_y, self.marker_x + size, self.marker_y)
+        line1 = QGraphicsLineItem(
+            self.marker_x - size,
+            self.marker_y,
+            self.marker_x + size,
+            self.marker_y,
+        )
         line1.setPen(self.marker_pen)
         line1.setZValue(20)
         self.scene.addItem(line1)
         self.marker_lines.append(line1)
 
-        line2 = QGraphicsLineItem(self.marker_x, self.marker_y - size, self.marker_x, self.marker_y + size)
+        line2 = QGraphicsLineItem(
+            self.marker_x,
+            self.marker_y - size,
+            self.marker_x,
+            self.marker_y + size,
+        )
         line2.setPen(self.marker_pen)
         line2.setZValue(20)
         self.scene.addItem(line2)
@@ -430,7 +739,7 @@ class PointPickerDialog(QDialog):
 
         dot = QGraphicsEllipseItem(self.marker_x - 3, self.marker_y - 3, 6, 6)
         dot.setPen(self.marker_pen)
-        dot.setBrush(QBrush(QColor("#7F43E3")))
+        dot.setBrush(QBrush(QColor("#8B5CF6")))
         dot.setZValue(20)
         self.scene.addItem(dot)
         self.marker_lines.append(dot)
@@ -448,6 +757,7 @@ class PointPickerDialog(QDialog):
             scene_pos = self.view.mapToScene(event.position().toPoint())
             self.marker_x = int(scene_pos.x())
             self.marker_y = int(scene_pos.y())
+            self.point_changed = True
             self.draw_marker()
             event.accept()
         else:
@@ -467,4 +777,3 @@ class PointPickerDialog(QDialog):
 
     def get_point(self):
         return self.marker_x, self.marker_y
-

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -58,7 +59,6 @@ from ui.collapsible import CollapsibleSection
 from ui.message_dialog import MessageDialog
 from ui.name_list import NameListEditor
 from ui.point_picker import PointPickerDialog
-from ui.preview import PreviewDialog
 from ui.preview_pane import PreviewPane
 from ui.worker import GenerationWorker
 
@@ -119,13 +119,17 @@ class DiplomaGenerator(QMainWindow):
         self._build_menu()
 
         central = QWidget()
+        central.setObjectName("central")
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(14, 10, 14, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setSpacing(14)
 
         self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setObjectName("main_splitter")
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("main_tabs")
+        self.tabs.tabBar().setExpanding(False)
         self.tab_main = QWidget()
         self.tab_position = QWidget()
         self.tab_format = QWidget()
@@ -133,7 +137,7 @@ class DiplomaGenerator(QMainWindow):
         self.tab_settings = QWidget()
         self.tabs.addTab(self.tab_main, "Основные")
         self.tabs.addTab(self.tab_position, "Позиция")
-        self.tabs.addTab(self.tab_format, "Формат имени")
+        self.tabs.addTab(self.tab_format, "Имя")
         self.tabs.addTab(self.tab_output, "Вывод")
         self.tabs.addTab(self.tab_settings, "Настройки")
         self.main_splitter.addWidget(self.tabs)
@@ -143,7 +147,7 @@ class DiplomaGenerator(QMainWindow):
         self.main_splitter.addWidget(self.preview_pane)
         self.main_splitter.setStretchFactor(0, 1)
         self.main_splitter.setStretchFactor(1, 0)
-        self.main_splitter.setSizes([820, 340])
+        self.main_splitter.setSizes([780, 380])
         main_layout.addWidget(self.main_splitter, 1)
 
         self.build_tab_main()
@@ -152,9 +156,10 @@ class DiplomaGenerator(QMainWindow):
         self.build_tab_output()
         self.build_tab_settings()
 
-        bottom = QWidget()
+        bottom = QFrame()
+        bottom.setObjectName("action_bar")
         bottom_layout = QHBoxLayout(bottom)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setContentsMargins(14, 8, 8, 8)
         bottom_layout.setSpacing(10)
 
         self.status_label = QLabel("Готов к работе")
@@ -212,7 +217,7 @@ class DiplomaGenerator(QMainWindow):
         file_menu.addAction(action_quit)
 
         generation_menu = menu.addMenu("Генерация")
-        self.action_preview = QAction("Предпросмотр", self)
+        self.action_preview = QAction("Редактор грамоты", self)
         self.action_preview.setShortcut(QKeySequence("F5"))
         self.action_preview.triggered.connect(self.open_preview)
         generation_menu.addAction(self.action_preview)
@@ -296,7 +301,8 @@ class DiplomaGenerator(QMainWindow):
         style_layout.addSpacing(14)
         style_layout.addWidget(QLabel("Цвет:"))
         self.color_preview = QPushButton()
-        self.color_preview.setFixedSize(32, 32)
+        self.color_preview.setObjectName("color_swatch")
+        self.color_preview.setFixedSize(34, 34)
         self.color_preview.setToolTip("Выбрать цвет текста")
         self.color_preview.clicked.connect(self.choose_color)
         self._set_color_preview(self.text_color)
@@ -324,7 +330,7 @@ class DiplomaGenerator(QMainWindow):
         self.names_editor.changed.connect(self._on_names_changed)
 
         self.excluded_editor = NameListEditor(
-            "Исключения (не влезли в границы или пропущены)",
+            "Исключения (не влезли в поля для печати или пропущены)",
             "Иванов Иван Иванович",
             show_load=False,
             show_header=False,
@@ -423,9 +429,9 @@ class DiplomaGenerator(QMainWindow):
         layout.addWidget(offset_group)
 
         buttons = QHBoxLayout()
-        pick_btn = QPushButton("Указать точку на грамоте")
+        pick_btn = QPushButton("Открыть редактор")
         pick_btn.setObjectName("secondary_btn")
-        pick_btn.clicked.connect(self.pick_position)
+        pick_btn.clicked.connect(self.open_preview)
         buttons.addWidget(pick_btn)
         reset_btn = QPushButton("Сбросить позицию")
         reset_btn.setObjectName("link_btn")
@@ -469,13 +475,13 @@ class DiplomaGenerator(QMainWindow):
         self.margin_spin.setRange(0, 100000)
         self.margin_spin.setValue(36)
         self.margin_spin.setSuffix(" px")
-        params_form.addRow("Отступ от краёв (safe area):", self.margin_spin)
+        params_form.addRow("Поля для печати:", self.margin_spin)
         layout.addWidget(params_group)
 
         hint = QLabel(
             "В режиме «Авто» текст переносится по словам на любое число строк "
-            "с учётом выбранного шрифта и отступа. Проверка границ учитывает "
-            "смещения и вертикальные края."
+            "с учётом выбранного шрифта и полей для печати. Проверка границ "
+            "учитывает смещения и вертикальные края."
         )
         hint.setWordWrap(True)
         hint.setObjectName("hint_label")
@@ -539,12 +545,12 @@ class DiplomaGenerator(QMainWindow):
         )
         output_layout.addWidget(self.cleanup_previous_check)
 
-        self.preview_check = QCheckBox("Показывать окно предпросмотра перед генерацией")
+        self.preview_check = QCheckBox("Открывать редактор перед генерацией")
         self.preview_check.setChecked(True)
         output_layout.addWidget(self.preview_check)
         layout.addWidget(output_group)
 
-        preview_group = QGroupBox("Текст для предпросмотра")
+        preview_group = QGroupBox("Текст в редакторе")
         preview_layout = QVBoxLayout(preview_group)
         self.preview_group = QButtonGroup(self)
         self.rb_preview_test = QRadioButton("Тестовое имя (Иванов Иван Иванович)")
@@ -831,10 +837,10 @@ class DiplomaGenerator(QMainWindow):
         self.style().polish(self)
 
         if theme == "dark":
-            set_title_bar_color(self, "#222222")
+            set_title_bar_color(self, "#0E1117")
             set_title_bar_light_theme(self, False)
         else:
-            set_title_bar_color(self, "#F2F2F2")
+            set_title_bar_color(self, "#F5F6FA")
             set_title_bar_light_theme(self, True)
 
         if hasattr(self, "completer"):
@@ -850,10 +856,10 @@ class DiplomaGenerator(QMainWindow):
         dialog.style().unpolish(dialog)
         dialog.style().polish(dialog)
         if theme == "dark":
-            set_title_bar_color(dialog, "#222222")
+            set_title_bar_color(dialog, "#0E1117")
             set_title_bar_light_theme(dialog, False)
         else:
-            set_title_bar_color(dialog, "#F2F2F2")
+            set_title_bar_color(dialog, "#F5F6FA")
             set_title_bar_light_theme(dialog, True)
 
     def apply_theme_to_completer(self, completer: QCompleter) -> None:
@@ -907,9 +913,7 @@ class DiplomaGenerator(QMainWindow):
 
     def _set_color_preview(self, color: tuple[int, int, int]) -> None:
         value = QColor(*color).name()
-        self.color_preview.setStyleSheet(
-            f"background-color: {value}; border: 1px solid #555555; border-radius: 5px;"
-        )
+        self.color_preview.setStyleSheet(f"background-color: {value};")
 
     def choose_color(self) -> None:
         color = QColorDialog.getColor(
@@ -1278,46 +1282,18 @@ class DiplomaGenerator(QMainWindow):
         self.status_label.setText("Предпросмотр создан")
         return True
 
-    def show_preview_dialog(self) -> int:
-        if self.preview_image is None and not self.make_preview():
-            return QDialog.Rejected
-        dialog = PreviewDialog(
-            self.preview_image,
-            self,
-            margin=self.margin_spin.value(),
-        )
-        self.apply_theme_to_dialog(dialog, self.current_theme)
-        return int(dialog.exec())
-
-    def open_preview(self) -> None:
-        if not self.get_names_list():
-            self._message("Предпросмотр", "Добавьте хотя бы одно ФИО.", [("ОК", "primary")])
-            return
-        if not self.make_preview():
-            return
-        dialog = PreviewDialog(
-            self.preview_image,
-            self,
-            margin=self.margin_spin.value(),
-        )
-        self.apply_theme_to_dialog(dialog, self.current_theme)
-        result = dialog.exec()
-        if result == 2:
-            self.pick_position()
-            if self.make_preview():
-                self.show_preview_dialog()
-
-    def pick_position(self) -> None:
+    def _open_editor(self, people=None, *, ok_text: str = "Применить") -> int:
         if not self.template_path or not Path(self.template_path).is_file():
             self._message("Ошибка", "Сначала выберите шаблон грамоты.", [("ОК", "primary")])
-            return
+            return int(QDialog.Rejected)
         initial_x = None if self.x_auto_check.isChecked() else self.x_edit.value()
         initial_y = None if self.y_auto_check.isChecked() else self.y_edit.value()
         try:
             render_config = self.get_render_config()
         except ValueError:
             render_config = None
-        preview_parts = self.get_preview_parts(self.get_names_list())
+        preview_people = people if people is not None else self.get_names_list()
+        preview_parts = self.get_preview_parts(preview_people)
         try:
             dialog = PointPickerDialog(
                 self.template_path,
@@ -1331,25 +1307,58 @@ class DiplomaGenerator(QMainWindow):
             )
         except Exception as exc:
             self._error(f"Не удалось открыть шаблон: {exc}")
-            return
+            return int(QDialog.Rejected)
+        if hasattr(dialog, "ok_btn"):
+            dialog.ok_btn.setText(ok_text)
         self.apply_theme_to_dialog(dialog, self.current_theme)
-        if dialog.exec() == QDialog.Accepted:
-            x, y = dialog.get_point()
-            align = dialog.get_align()
-            align_button = {
-                "left": self.rb_left,
-                "center": self.rb_center,
-                "right": self.rb_right,
-            }.get(align)
-            if align_button is not None:
-                align_button.setChecked(True)
-            # Выбор точки — это явное указание позиции, поэтому автоцентр
-            # отключаем: иначе выбранные координаты молча игнорировались бы.
+        result = int(dialog.exec())
+        if result == int(QDialog.Accepted):
+            self._apply_editor_values(dialog)
+        return result
+
+    def _apply_editor_values(self, dialog) -> None:
+        x, y = dialog.get_point()
+        align = dialog.get_align()
+        align_button = {
+            "left": self.rb_left,
+            "center": self.rb_center,
+            "right": self.rb_right,
+        }.get(align)
+        if align_button is not None:
+            align_button.setChecked(True)
+
+        # Если точку действительно меняли, автоцентр отключаем: иначе
+        # выбранные координаты молча игнорировались бы. При простом изменении
+        # шрифта или цвета автоцентр сохраняется.
+        if getattr(dialog, "point_changed", True):
             self.x_auto_check.setChecked(False)
             self.y_auto_check.setChecked(False)
             self.x_edit.setValue(max(0, x))
             self.y_edit.setValue(max(0, y))
-            self._schedule_preview()
+
+        has_style = getattr(dialog, "render_config", None) is not None
+        if has_style and hasattr(dialog, "get_font_size"):
+            self.font_size_spin.setValue(dialog.get_font_size())
+        if has_style and hasattr(dialog, "get_text_color"):
+            self.text_color = tuple(dialog.get_text_color())
+            self._set_color_preview(self.text_color)
+        if has_style and hasattr(dialog, "get_letter_spacing"):
+            self.letter_spacing_spin.setValue(dialog.get_letter_spacing())
+        if hasattr(dialog, "get_margin"):
+            self.margin_spin.setValue(dialog.get_margin())
+        self._schedule_preview()
+
+    def show_preview_dialog(self, people=None) -> int:
+        return self._open_editor(people=people, ok_text="Продолжить")
+
+    def open_preview(self) -> None:
+        if not self.get_names_list():
+            self._message("Редактор", "Добавьте хотя бы одно ФИО.", [("ОК", "primary")])
+            return
+        self._open_editor(ok_text="Применить")
+
+    def pick_position(self) -> None:
+        self._open_editor(ok_text="Применить")
 
     def reset_position(self) -> None:
         self.x_auto_check.setChecked(True)
@@ -1566,7 +1575,7 @@ class DiplomaGenerator(QMainWindow):
 
         generated_people = people
         if problematic:
-            message = f"Текст выходит за границы safe area у {len(problematic)} грамот:\n\n"
+            message = f"Текст выходит за поля для печати у {len(problematic)} грамот:\n\n"
             for parts, problems in problematic[:12]:
                 details = "; ".join(
                     f"{text or 'блок'}: +{overflow}px ({side})"
@@ -1576,7 +1585,7 @@ class DiplomaGenerator(QMainWindow):
             if len(problematic) > 12:
                 message += f"\n…и ещё {len(problematic) - 12}"
             answer = self._message(
-                "Текст выходит за границы",
+                "Текст выходит за поля для печати",
                 message,
                 [("Сделать все", "primary"), ("Только корректные", ""), ("Отмена", "")],
             )
@@ -1585,24 +1594,17 @@ class DiplomaGenerator(QMainWindow):
                 generated_people = [parts for parts in people if tuple(parts) not in bad_keys]
                 self._merge_excluded([parts for parts, _ in problematic])
                 if not generated_people:
-                    self._error("Нет ни одной грамоты, которая помещается в границы.")
+                    self._error("Нет ни одной грамоты, которая помещается в поля для печати.")
                     return
             elif answer != 0:
                 self.status_label.setText("Отменено пользователем")
                 return
 
         if self.preview_check.isChecked():
-            while True:
-                if not self.make_preview(generated_people):
-                    return
-                result = self.show_preview_dialog()
-                if result == QDialog.Rejected:
-                    self.status_label.setText("Отменено пользователем")
-                    return
-                if result == 2:
-                    self.pick_position()
-                    continue
-                break
+            result = self.show_preview_dialog(generated_people)
+            if result == QDialog.Rejected:
+                self.status_label.setText("Отменено пользователем")
+                return
 
         policy = "number"
         fmt = self.get_output_format()
@@ -1854,11 +1856,12 @@ class DiplomaGenerator(QMainWindow):
 5. Настройте позицию во вкладке «Позиция» или укажите точку на шаблоне.
 6. Нажмите «Сгенерировать».
 
-ПРЕДПРОСМОТР
+РЕДАКТОР
 
 Справа всегда показывается живой предпросмотр. Двойной клик по нему или F5
-открывает окно с масштабом. Перед генерацией можно включить отдельное окно
-подтверждения.
+открывает редактор: там можно сразу изменить размер и цвет текста, положение,
+выравнивание и поля для печати. Перед генерацией редактор можно открывать
+автоматически.
 
 ПОИСК В СПИСКЕ
 
@@ -1868,7 +1871,7 @@ class DiplomaGenerator(QMainWindow):
 
 ИСКЛЮЧЕНИЯ
 
-ФИО, не влезшие в границы, можно перенести обратно в основной список.
+ФИО, не влезшие в поля для печати, можно перенести обратно в основной список.
 Перенос не стирает основной список без явного выбора.
 
 БЕЗОПАСНОСТЬ ФАЙЛОВ
@@ -1878,7 +1881,7 @@ AutoFill никогда не очищает всю папку. Удаляютс�
 или пропустить — решение принимается один раз для всей пачки.
 
 Горячие клавиши: Ctrl+O — шаблон, Ctrl+Shift+O — список, Ctrl+G — генерация,
-F5 — предпросмотр, Esc — отмена генерации.
+F5 — редактор, Esc — отмена генерации.
 
 Настройки сохраняются при выходе (или кнопкой в разделе «Настройки»)."""
         self._message("Инструкция", text, [("Понятно", "primary")])
