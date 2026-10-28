@@ -1251,7 +1251,11 @@ class DiplomaGenerator(QMainWindow):
     def show_preview_dialog(self) -> int:
         if self.preview_image is None and not self.make_preview():
             return QDialog.Rejected
-        dialog = PreviewDialog(self.preview_image, self)
+        dialog = PreviewDialog(
+            self.preview_image,
+            self,
+            margin=self.margin_spin.value(),
+        )
         self.apply_theme_to_dialog(dialog, self.current_theme)
         return int(dialog.exec())
 
@@ -1261,7 +1265,11 @@ class DiplomaGenerator(QMainWindow):
             return
         if not self.make_preview():
             return
-        dialog = PreviewDialog(self.preview_image, self)
+        dialog = PreviewDialog(
+            self.preview_image,
+            self,
+            margin=self.margin_spin.value(),
+        )
         self.apply_theme_to_dialog(dialog, self.current_theme)
         result = dialog.exec()
         if result == 2:
@@ -1289,6 +1297,7 @@ class DiplomaGenerator(QMainWindow):
                 self.get_align(),
                 render_config=render_config,
                 preview_parts=preview_parts,
+                safe_margin=self.margin_spin.value(),
             )
         except Exception as exc:
             self._error(f"Не удалось открыть шаблон: {exc}")

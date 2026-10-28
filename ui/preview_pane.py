@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
 
 class PreviewPane(QFrame):
@@ -16,37 +23,64 @@ class PreviewPane(QFrame):
         self._original: QPixmap | None = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
+        header = QHBoxLayout()
+        header.setSpacing(6)
         title = QLabel("Предпросмотр")
         title.setObjectName("preview_title")
-        layout.addWidget(title)
+        header.addWidget(title)
+        header.addStretch()
+
+        self.open_button = QPushButton("Открыть")
+        self.open_button.setObjectName("link_btn")
+        self.open_button.setToolTip("Открыть предпросмотр")
+        self.open_button.setAutoDefault(False)
+        self.open_button.clicked.connect(self.openRequested)
+        header.addWidget(self.open_button)
+        layout.addLayout(header)
+
+        self.canvas = QFrame()
+        self.canvas.setObjectName("preview_canvas")
+        canvas_layout = QVBoxLayout(self.canvas)
+        canvas_layout.setContentsMargins(8, 8, 8, 8)
+        canvas_layout.setSpacing(0)
 
         self.image_label = QLabel("Выберите шаблон, шрифт и добавьте ФИО")
         self.image_label.setObjectName("preview_image")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setWordWrap(True)
-        self.image_label.setMinimumSize(240, 260)
-        layout.addWidget(self.image_label, 1)
+        self.image_label.setMinimumSize(220, 220)
+        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        canvas_layout.addWidget(self.image_label)
+        layout.addWidget(self.canvas, 1)
 
         self.hint_label = QLabel("Двойной клик — открыть предпросмотр")
         self.hint_label.setObjectName("hint_label")
         self.hint_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hint_label)
 
-        self.open_button = QPushButton("Открыть предпросмотр")
-        self.open_button.clicked.connect(self.openRequested)
-        layout.addWidget(self.open_button)
-
     def set_image(self, pil_image) -> None:
         if pil_image.mode == "RGBA":
             data = pil_image.tobytes("raw", "RGBA")
-            image = QImage(data, pil_image.width, pil_image.height, pil_image.width * 4, QImage.Format_RGBA8888)
+            image = QImage(
+                data,
+                pil_image.width,
+                pil_image.height,
+                pil_image.width * 4,
+                QImage.Format_RGBA8888,
+            )
         else:
             rgb = pil_image.convert("RGB")
             data = rgb.tobytes("raw", "RGB")
-            image = QImage(data, rgb.width, rgb.height, rgb.width * 3, QImage.Format_RGB888)
+            image = QImage(
+                data,
+                rgb.width,
+                rgb.height,
+                rgb.width * 3,
+                QImage.Format_RGB888,
+            )
         self._original = QPixmap.fromImage(image.copy())
         self.hint_label.show()
         self._rescale()

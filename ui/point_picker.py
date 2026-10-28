@@ -4,7 +4,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import replace
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageFont
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
@@ -23,8 +23,13 @@ from PySide6.QtWidgets import (
 
 from core.generator import RenderConfig, render_page
 from core.screen_utils import get_window_size
+from ui.overlays import add_safe_area, set_safe_area_visible
 
 log = logging.getLogger(__name__)
+
+# Полноразмерный рендер текста на 6000x4000 занимает сотни миллисекунд.
+# Для интерактивного выбора точки достаточно 3000 px по длинной стороне.
+PREVIEW_MAX_SIDE = 3000
 
 
 class PointPickerDialog(QDialog):
@@ -37,6 +42,7 @@ class PointPickerDialog(QDialog):
         align="left",
         render_config: RenderConfig | None = None,
         preview_parts: Sequence[str] | None = None,
+        safe_margin: int | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Укажи точку")
@@ -45,6 +51,9 @@ class PointPickerDialog(QDialog):
         self.align = align
         self.render_config = render_config
         self.preview_parts = list(preview_parts or [])
+        if safe_margin is None and render_config is not None:
+            safe_margin = render_config.margin
+        self.safe_margin = max(0, int(safe_margin or 0))
 
         self.image_path = image_path
         self.pil_image = Image.open(image_path)
@@ -60,17 +69,38 @@ class PointPickerDialog(QDialog):
         self.pil_image.close()
         self.base_image = self.pil_image_rgb.copy()
         self.pil_image_rgb.close()
+
+        self.display_scale = min(
+            1.0,
+            PREVIEW_MAX_SIDE / max(self.img_width, self.img_height),
+        )
+        if self.display_scale < 1.0:
+            preview_size = (
+                max(1, round(self.img_width * self.display_scale)),
+                max(1, round(self.img_height * self.display_scale)),
+            )
+            self.preview_base_image = self.base_image.resize(
+                preview_size,
+                Image.Resampling.LANCZOS,
+            )
+        else:
+            self.preview_base_image = self.base_image
+
+        self.preview_config = self._scaled_render_config(
+            self.render_config,
+            self.display_scale,
+        )
         self.preview_font = None
-        if self.render_config is not None and self.preview_parts:
+        if self.preview_config is not None and self.preview_parts:
             try:
                 self.preview_font = ImageFont.truetype(
-                    self.render_config.font_path,
-                    size=self.render_config.font_size,
+                    self.preview_config.font_path,
+                    size=self.preview_config.font_size,
                 )
             except (OSError, ValueError):
                 self.preview_font = None
 
-        self.pixmap = self._pil_to_pixmap(self.base_image)
+        self.pixmap = self._pil_to_pixmap(self.preview_base_image)
 
         self.scene = QGraphicsScene(self)
         self.view = QGraphicsView(self.scene)
@@ -80,7 +110,19 @@ class PointPickerDialog(QDialog):
         self.view.setMouseTracking(True)
 
         self.pixmap_item = QGraphicsPixmapItem(self.pixmap)
+        self.pixmap_item.setTransformationMode(Qt.SmoothTransformation)
+        if self.display_scale < 1.0:
+            self.pixmap_item.setScale(1.0 / self.display_scale)
         self.scene.addItem(self.pixmap_item)
+
+        self.safe_area_items = add_safe_area(
+            self.scene,
+            self.img_width,
+            self.img_height,
+            self.safe_margin,
+            z=10,
+        )
+        set_safe_area_visible(self.safe_area_items, self.safe_margin > 0)
 
         w, h = get_window_size(self, 0.7, 0.75)
         self.resize(max(680, w), max(480, h))
@@ -97,8 +139,9 @@ class PointPickerDialog(QDialog):
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
 
-        self.marker_pen = QPen(QColor(255, 0, 0))
+        self.marker_pen = QPen(QColor("#7F43E3"))
         self.marker_pen.setWidth(3)
+        self.marker_pen.setCosmetic(True)
         self.marker_lines = []
 
         self._preview_timer = QTimer(self)
@@ -147,7 +190,7 @@ class PointPickerDialog(QDialog):
         hint_label.setWordWrap(True)
         layout.addWidget(hint_label)
         help_label = QLabel(
-            "Красная рамка — safe area. Текст рисуется в текущем шрифте и цвете. "
+            "Красная пунктирная рамка — safe area. Текст рисуется в текущем шрифте и цвете. "
             "Левая кнопка — перемещать изображение | Колесо — зум | "
             "Стрелки — сдвиг | Shift — 10 px | Ctrl — 50 px | "
             "Alt + движение мыши — расстояние до точки"
@@ -192,34 +235,46 @@ class PointPickerDialog(QDialog):
         ).copy()
         return QPixmap.fromImage(qimage)
 
+    @staticmethod
+    def _scaled_render_config(config: RenderConfig | None, scale: float) -> RenderConfig | None:
+        if config is None or scale >= 1.0:
+            return config
+
+        def scaled(value):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return value * scale
+            return value
+
+        return replace(
+            config,
+            font_size=max(1, int(round(config.font_size * scale))),
+            x=scaled(config.x),
+            y=scaled(config.y),
+            x_offset=scaled(config.x_offset),
+            y_offset=scaled(config.y_offset),
+            line_spacing=scaled(config.line_spacing),
+            letter_spacing=scaled(config.letter_spacing),
+            margin=scaled(config.margin),
+        )
+
     def _schedule_preview(self) -> None:
-        if self.render_config is not None:
+        if self.preview_config is not None and self.preview_font is not None:
             self._preview_timer.start()
 
     def _render_preview(self) -> None:
-        image = self.base_image.copy()
-        if self.render_config is not None:
-            margin = max(0, int(self.render_config.margin))
-            margin = min(margin, self.img_width // 2, self.img_height // 2)
-            if margin:
-                draw = ImageDraw.Draw(image)
-                draw.rectangle(
-                    (margin, margin, self.img_width - margin - 1, self.img_height - margin - 1),
-                    outline=(220, 60, 60),
-                    width=2,
-                )
-            if self.preview_font is not None and self.preview_parts:
-                config = replace(
-                    self.render_config,
-                    x=self.marker_x,
-                    y=self.marker_y,
-                    align=self.align,
-                )
-                try:
-                    image = render_page(image, self.preview_parts, self.preview_font, config)
-                except Exception:
-                    log.debug("Не удалось нарисовать предпросмотр в выборе точки", exc_info=True)
-                    image = self.base_image.copy()
+        image = self.preview_base_image.copy()
+        if self.preview_config is not None and self.preview_font is not None and self.preview_parts:
+            config = replace(
+                self.preview_config,
+                x=self.marker_x * self.display_scale,
+                y=self.marker_y * self.display_scale,
+                align=self.align,
+            )
+            try:
+                image = render_page(image, self.preview_parts, self.preview_font, config)
+            except Exception:
+                log.debug("Не удалось нарисовать предпросмотр в выборе точки", exc_info=True)
+                image = self.preview_base_image.copy()
         self.pixmap_item.setPixmap(self._pil_to_pixmap(image))
 
     def center_marker(self) -> None:
@@ -250,8 +305,6 @@ class PointPickerDialog(QDialog):
         self._clamp_marker()
         self.draw_marker()
 
-
-
     def zoom_in(self):
         self.zoom_at_cursor(1.2)
 
@@ -265,7 +318,6 @@ class PointPickerDialog(QDialog):
         scene_pos = self.view.mapToScene(cursor_pos)
 
         new_scale = max(0.01, min(50.0, self.scale_factor * factor))
-        factor = new_scale / self.scale_factor if self.scale_factor else 1.0
         self.scale_factor = new_scale
 
         self.view.resetTransform()
@@ -301,17 +353,20 @@ class PointPickerDialog(QDialog):
 
         line1 = QGraphicsLineItem(self.marker_x - size, self.marker_y, self.marker_x + size, self.marker_y)
         line1.setPen(self.marker_pen)
+        line1.setZValue(20)
         self.scene.addItem(line1)
         self.marker_lines.append(line1)
 
         line2 = QGraphicsLineItem(self.marker_x, self.marker_y - size, self.marker_x, self.marker_y + size)
         line2.setPen(self.marker_pen)
+        line2.setZValue(20)
         self.scene.addItem(line2)
         self.marker_lines.append(line2)
 
         dot = QGraphicsEllipseItem(self.marker_x - 3, self.marker_y - 3, 6, 6)
         dot.setPen(self.marker_pen)
-        dot.setBrush(QBrush(QColor(255, 0, 0)))
+        dot.setBrush(QBrush(QColor("#7F43E3")))
+        dot.setZValue(20)
         self.scene.addItem(dot)
         self.marker_lines.append(dot)
 
@@ -347,5 +402,4 @@ class PointPickerDialog(QDialog):
 
     def get_point(self):
         return self.marker_x, self.marker_y
-
 
