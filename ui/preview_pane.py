@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
+
+
+class PreviewPane(QFrame):
+    """Компактный живой предпросмотр справа от настроек."""
+
+    openRequested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("preview_pane")
+        self._original: QPixmap | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        title = QLabel("Предпросмотр")
+        title.setObjectName("preview_title")
+        layout.addWidget(title)
+
+        self.image_label = QLabel("Выберите шаблон, шрифт и добавьте ФИО")
+        self.image_label.setObjectName("preview_image")
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setWordWrap(True)
+        self.image_label.setMinimumSize(240, 260)
+        layout.addWidget(self.image_label, 1)
+
+        self.hint_label = QLabel("Двойной клик — открыть предпросмотр")
+        self.hint_label.setObjectName("hint_label")
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.hint_label)
+
+        self.open_button = QPushButton("Открыть предпросмотр")
+        self.open_button.clicked.connect(self.openRequested)
+        layout.addWidget(self.open_button)
+
+    def set_image(self, pil_image) -> None:
+        if pil_image.mode == "RGBA":
+            data = pil_image.tobytes("raw", "RGBA")
+            image = QImage(data, pil_image.width, pil_image.height, pil_image.width * 4, QImage.Format_RGBA8888)
+        else:
+            rgb = pil_image.convert("RGB")
+            data = rgb.tobytes("raw", "RGB")
+            image = QImage(data, rgb.width, rgb.height, rgb.width * 3, QImage.Format_RGB888)
+        self._original = QPixmap.fromImage(image.copy())
+        self.hint_label.show()
+        self._rescale()
+
+    def set_message(self, text: str) -> None:
+        self._original = None
+        self.image_label.setPixmap(QPixmap())
+        self.image_label.setText(text)
+        self.hint_label.hide()
+
+    def clear(self) -> None:
+        self.set_message("Выберите шаблон, шрифт и добавьте ФИО")
+
+    def _rescale(self) -> None:
+        if self._original is None or self._original.isNull():
+            return
+        size = self.image_label.size()
+        if size.width() <= 1 or size.height() <= 1:
+            return
+        self.image_label.setText("")
+        self.image_label.setPixmap(
+            self._original.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._rescale()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if self._original is not None:
+            self.openRequested.emit()
+        super().mouseDoubleClickEvent(event)

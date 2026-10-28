@@ -1,58 +1,89 @@
-from core.text_render import get_text_width
-from PIL import Image, ImageDraw
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from core.text_render import text_width
 
 
-def format_name_lines(parts, mode, split_after=1):
+def format_name_lines(parts: Sequence[str], mode: str, split_after: int = 1) -> list[str] | None:
+    """Разбивает ФИО на строки согласно выбранному режиму.
+
+    ``None`` возвращается только для режима ``auto`` — решение о переносе
+    принимает :func:`resolve_auto_lines` с учётом реальной ширины шрифта.
+    """
+
+    words = [str(part).strip() for part in parts if str(part).strip()]
+    if not words:
+        return [""]
+
     if mode == "single_line":
-        return [" ".join(parts)]
-    elif mode == "split_surname":
-        if len(parts) > 2:
-            return [parts[0], " ".join(parts[1:])]
-        return parts
-    elif mode == "split_all":
-        return parts
-    elif mode == "custom":
-        if len(parts) <= split_after:
-            return [" ".join(parts)]
-        return [" ".join(parts[:split_after]), " ".join(parts[split_after:])]
-    elif mode == "auto":
+        return [" ".join(words)]
+    if mode == "split_surname":
+        if len(words) > 2:
+            return [words[0], " ".join(words[1:])]
+        return words
+    if mode == "split_all":
+        return words
+    if mode == "custom":
+        split_after = max(1, int(split_after))
+        if len(words) <= split_after:
+            return [" ".join(words)]
+        return [" ".join(words[:split_after]), " ".join(words[split_after:])]
+    if mode == "auto":
         return None
-    else:
-        return [" ".join(parts)]
+    return [" ".join(words)]
 
 
-def resolve_auto_lines(parts, font, letter_spacing, img_width, margin):
-    single_line = " ".join(parts)
-    temp_img = Image.new("RGB", (img_width, 100))
-    temp_draw = ImageDraw.Draw(temp_img)
-    w = get_text_width(temp_draw, single_line, font, letter_spacing)
+def wrap_text(
+    text: str,
+    font,
+    max_width: float,
+    letter_spacing: float = 0,
+) -> list[str]:
+    """Жадно переносит текст по словам на любое число строк."""
 
-    safe_width = img_width - 2 * margin
+    words = text.split()
+    if not words:
+        return [""]
 
-    if w > safe_width and len(parts) > 1:
-        return [parts[0], " ".join(parts[1:])]
-    return [single_line]
+    max_width = max(1.0, float(max_width))
+    lines: list[str] = []
+    current = words[0]
 
-def plural(n, forms):
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if text_width(candidate, font, letter_spacing) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+
+    lines.append(current)
+    return lines
+
+
+def resolve_auto_lines(
+    parts: Sequence[str],
+    font,
+    letter_spacing: float,
+    img_width: int,
+    margin: float,
+) -> list[str]:
+    """Переносит ФИО по доступной ширине, а не только на две строки."""
+
+    safe_width = max(1.0, float(img_width) - 2.0 * float(margin))
+    return wrap_text(" ".join(str(part).strip() for part in parts if str(part).strip()), font, safe_width, letter_spacing)
+
+
+def plural(n: int, forms: Sequence[str]) -> str:
     """forms = ('грамота', 'грамоты', 'грамот')"""
-    n = abs(n) % 100
-    if 11 <= n <= 19:
-        return forms[2]
-    n = n % 10
-    if n == 1:
-        return forms[0]
-    elif 2 <= n <= 4:
-        return forms[1]
-    return forms[2]
 
-def plural_instrumental(n, forms):
-    """
-    forms = ('грамотой', 'грамотами', 'грамотами')
-    """
-    n = abs(n) % 100
+    n = abs(int(n)) % 100
     if 11 <= n <= 19:
         return forms[2]
     n = n % 10
     if n == 1:
         return forms[0]
+    if 2 <= n <= 4:
+        return forms[1]
     return forms[2]

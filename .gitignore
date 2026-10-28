@@ -191,12 +191,10 @@ desktop.ini
 _preview.png
 .idea/
 settings.json
-icons/
-build.py
-utils/
-setup.iss
-simple_logger.py
 app_log.txt
+
+# Рабочие документы рефакторинга (локально, не коммитим)
+temp/
 
 
 

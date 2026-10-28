@@ -1,0 +1,121 @@
+name: Build AutoFill
+
+on:
+  push:
+    branches: [ main, master, "refactor/**" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: python -m pip install "ruff>=0.9,<1.0"
+      - name: Lint
+        run: ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pytest>=8,<9"
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+  build-windows:
+    needs: [lint, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Build EXE
+        run: python build.py
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoFill-Windows
+          path: dist/AutoFill.exe
+          if-no-files-found: error
+
+  build-macos:
+    needs: [lint, test]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile resources
+        run: pyside6-rcc resources.qrc -o resources_rc.py
+      - name: Build APP
+        run: |
+          python -m PyInstaller --onefile --windowed --name AutoFill \
+            --add-data "style.qss:." --hidden-import pypdf \
+            --collect-submodules fontTools --clean --noconfirm main.py
+      - name: Upload APP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoFill-macOS
+          path: dist/AutoFill.app
+          if-no-files-found: error
+
+  build-linux:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xfixes0
+      - name: Compile resources
+        run: pyside6-rcc resources.qrc -o resources_rc.py
+      - name: Build executable
+        run: |
+          python -m PyInstaller --onefile --windowed --name AutoFill \
+            --add-data "style.qss:." --hidden-import pypdf \
+            --collect-submodules fontTools --clean --noconfirm main.py
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoFill-Linux
+          path: dist/AutoFill
+          if-no-files-found: error
