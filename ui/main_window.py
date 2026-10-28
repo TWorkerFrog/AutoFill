@@ -118,7 +118,7 @@ class DiplomaGenerator(QMainWindow):
     # Построение интерфейса
     # ------------------------------------------------------------------
     def create_ui(self) -> None:
-        self._build_menu()
+        self._build_actions()
 
         central = QWidget()
         central.setObjectName("central")
@@ -142,6 +142,14 @@ class DiplomaGenerator(QMainWindow):
         self.tabs.addTab(self.tab_format, "Имя")
         self.tabs.addTab(self.tab_output, "Вывод")
         self.tabs.addTab(self.tab_settings, "Настройки")
+
+        help_btn = QPushButton("?")
+        help_btn.setObjectName("help_btn")
+        help_btn.setFixedSize(26, 26)
+        help_btn.setToolTip("Инструкция")
+        help_btn.clicked.connect(self.show_help)
+        self.tabs.setCornerWidget(help_btn, Qt.TopRightCorner)
+
         self.main_splitter.addWidget(self.tabs)
 
         self.preview_pane = PreviewPane()
@@ -194,51 +202,42 @@ class DiplomaGenerator(QMainWindow):
 
         main_layout.addWidget(bottom)
 
-    def _build_menu(self) -> None:
-        menu = self.menuBar()
+    def _build_actions(self) -> None:
+        """Горячие клавиши без отдельной строки меню.
 
-        file_menu = menu.addMenu("Файл")
+        Действия дублируются кнопками на вкладках, поэтому визуальное меню
+        только отнимает место.  QAction добавляем прямо в окно, чтобы
+        продолжили работать Ctrl+O, F5 и остальные сочетания.
+        """
+
         action_template = QAction("Выбрать шаблон…", self)
         action_template.setShortcut(QKeySequence("Ctrl+O"))
         action_template.triggered.connect(self.choose_template)
-        file_menu.addAction(action_template)
+        self.addAction(action_template)
 
         action_names = QAction("Загрузить список ФИО…", self)
         action_names.setShortcut(QKeySequence("Ctrl+Shift+O"))
         action_names.triggered.connect(self.load_names_file)
-        file_menu.addAction(action_names)
+        self.addAction(action_names)
 
         action_output = QAction("Выбрать папку сохранения…", self)
         action_output.triggered.connect(self.choose_output_dir)
-        file_menu.addAction(action_output)
-        file_menu.addSeparator()
+        self.addAction(action_output)
 
         action_quit = QAction("Выход", self)
         action_quit.setShortcut(QKeySequence("Ctrl+Q"))
         action_quit.triggered.connect(self.close)
-        file_menu.addAction(action_quit)
+        self.addAction(action_quit)
 
-        generation_menu = menu.addMenu("Генерация")
         self.action_preview = QAction("Редактор грамоты", self)
         self.action_preview.setShortcut(QKeySequence("F5"))
         self.action_preview.triggered.connect(self.open_preview)
-        generation_menu.addAction(self.action_preview)
+        self.addAction(self.action_preview)
 
         self.action_generate = QAction("Сгенерировать", self)
         self.action_generate.setShortcut(QKeySequence("Ctrl+G"))
         self.action_generate.triggered.connect(self.generate_all)
-        generation_menu.addAction(self.action_generate)
-
-        help_menu = menu.addMenu("Справка")
-        action_help = QAction("Инструкция", self)
-        action_help.triggered.connect(self.show_help)
-        help_menu.addAction(action_help)
-        action_license = QAction("Лицензия", self)
-        action_license.triggered.connect(self.show_license)
-        help_menu.addAction(action_license)
-        action_about = QAction("О программе", self)
-        action_about.triggered.connect(self.show_about)
-        help_menu.addAction(action_about)
+        self.addAction(self.action_generate)
 
     def build_tab_main(self) -> None:
         layout = QVBoxLayout(self.tab_main)
@@ -248,7 +247,9 @@ class DiplomaGenerator(QMainWindow):
         source_group = QGroupBox("Шаблон и шрифт")
         grid = QFormLayout(source_group)
         grid.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        grid.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        grid.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(10)
 
         template_row = QWidget()
         template_layout = QHBoxLayout(template_row)
@@ -293,15 +294,21 @@ class DiplomaGenerator(QMainWindow):
         style_row = QWidget()
         style_layout = QHBoxLayout(style_row)
         style_layout.setContentsMargins(0, 0, 0, 0)
-        style_layout.addWidget(QLabel("Размер:"))
+        style_layout.setSpacing(8)
+        size_label = QLabel("Размер:")
+        size_label.setObjectName("field_label")
+        style_layout.addWidget(size_label)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(1, 2000)
         self.font_size_spin.setValue(100)
         self.font_size_spin.setSuffix(" px")
+        self.font_size_spin.setFixedWidth(96)
         style_layout.addWidget(self.font_size_spin)
 
-        style_layout.addSpacing(14)
-        style_layout.addWidget(QLabel("Цвет:"))
+        style_layout.addSpacing(10)
+        color_label = QLabel("Цвет:")
+        color_label.setObjectName("field_label")
+        style_layout.addWidget(color_label)
         self.color_preview = QPushButton()
         self.color_preview.setObjectName("color_swatch")
         self.color_preview.setFixedSize(34, 34)
@@ -310,17 +317,19 @@ class DiplomaGenerator(QMainWindow):
         self._set_color_preview(self.text_color)
         style_layout.addWidget(self.color_preview)
 
-        style_layout.addSpacing(14)
+        style_layout.addSpacing(10)
         letter_label = QLabel("Интервал:")
+        letter_label.setObjectName("field_label")
         letter_label.setToolTip("Межбуквенный интервал")
         style_layout.addWidget(letter_label)
         self.letter_spacing_spin = QSpinBox()
         self.letter_spacing_spin.setRange(-20, 200)
         self.letter_spacing_spin.setValue(0)
         self.letter_spacing_spin.setSuffix(" px")
+        self.letter_spacing_spin.setFixedWidth(96)
         style_layout.addWidget(self.letter_spacing_spin)
         style_layout.addStretch()
-        grid.addRow("", style_row)
+        grid.addRow(style_row)
         layout.addWidget(source_group)
 
         self.names_editor = NameListEditor(
@@ -842,15 +851,29 @@ class DiplomaGenerator(QMainWindow):
         self.style().unpolish(self)
         self.style().polish(self)
 
-        if theme == "dark":
-            set_title_bar_color(self, "#1E1E1E")
-            set_title_bar_light_theme(self, False)
-        else:
-            set_title_bar_color(self, "#F5F6FA")
-            set_title_bar_light_theme(self, True)
+        self._apply_title_bar_theme(self, theme)
 
         if hasattr(self, "completer"):
             self.apply_theme_to_completer(self.completer)
+
+    @staticmethod
+    def _apply_title_bar_theme(window, theme: str) -> None:
+        """Красит заголовок окна и повторяет попытку после показа.
+
+        DWM иногда сбрасывает атрибуты, если применить их до появления
+        нативного окна, поэтому обновляем их ещё раз через event loop.
+        """
+
+        is_light = theme != "dark"
+        color = "#F5F6FA" if is_light else "#1E1E1E"
+
+        def apply() -> None:
+            set_title_bar_color(window, color)
+            set_title_bar_light_theme(window, is_light)
+
+        apply()
+        QTimer.singleShot(0, window, apply)
+        QTimer.singleShot(150, window, apply)
 
     def apply_theme_to_dialog(self, dialog, theme: str | None = None) -> None:
         theme = theme or self.current_theme
@@ -861,12 +884,7 @@ class DiplomaGenerator(QMainWindow):
             widget.style().polish(widget)
         dialog.style().unpolish(dialog)
         dialog.style().polish(dialog)
-        if theme == "dark":
-            set_title_bar_color(dialog, "#1E1E1E")
-            set_title_bar_light_theme(dialog, False)
-        else:
-            set_title_bar_color(dialog, "#F5F6FA")
-            set_title_bar_light_theme(dialog, True)
+        self._apply_title_bar_theme(dialog, theme)
 
     def apply_theme_to_completer(self, completer: QCompleter) -> None:
         popup = completer.popup()

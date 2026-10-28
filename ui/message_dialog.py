@@ -33,19 +33,24 @@ class MessageDialog(QDialog):
         self.setModal(True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
-        width, height = get_window_size(self, 0.32, 0.24)
-        self.setMinimumSize(420, 220)
-        self.resize(max(420, width), max(220, height))
+        line_count = max(1, text.count("\n") + 1)
+        width, _height = get_window_size(self, 0.36, 0.30)
+        width = max(460, min(760, width))
+        height = min(560, max(220, 150 + line_count * 22))
+        self.setMinimumSize(440, 220)
+        self.resize(width, height)
 
         self.clicked_index: int | None = None
         self.buttons: list[QPushButton] = []
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 14)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(14)
 
         self.text_browser = QTextBrowser(self)
+        self.text_browser.setObjectName("message_text")
         self.text_browser.setPlainText(text)
+        self.text_browser.document().setDocumentMargin(0)
         self.text_browser.setOpenExternalLinks(True)
         self.text_browser.setReadOnly(True)
         self.text_browser.setFrameShape(QTextBrowser.NoFrame)
@@ -53,6 +58,7 @@ class MessageDialog(QDialog):
         layout.addWidget(self.text_browser, 1)
 
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(8)
         button_layout.addStretch()
 
         button_specs = buttons or [("Закрыть", "primary")]
@@ -62,6 +68,7 @@ class MessageDialog(QDialog):
             button = QPushButton(button_text, self)
             if role == "primary":
                 button.setObjectName("primary_btn")
+            button.setMinimumWidth(110)
             button.setAutoDefault(False)
             button.setDefault(index == default_index)
             button.clicked.connect(lambda _checked=False, idx=index: self.button_clicked(idx))

@@ -593,7 +593,7 @@ QSplitter::handle:hover {
 
 QMenuBar {
     background-color: #1E1E1E;
-    color: #A0A0A0;
+    color: #C7C7C7;
     border: none;
 }
 
@@ -639,6 +639,20 @@ QTextBrowser {
     border: 1px solid #3A3A3A;
     border-radius: 8px;
     padding: 8px;
+}
+
+QTextBrowser#message_text {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    color: #F2F2F2;
+}
+
+QTextBrowser#message_text[theme="light"] {
+    background-color: transparent;
+    border: none;
+    color: #1F2328;
 }
 
 /* ============================================================
@@ -859,6 +873,35 @@ QComboBox[theme="light"]:focus {
     border-color: #8B5CF6;
 }
 
+QSpinBox[theme="light"]::up-button:hover,
+QSpinBox[theme="light"]::down-button:hover {
+    background-color: #F0F2F7;
+}
+
+QSpinBox[theme="light"]::up-arrow {
+    image: url(":/icons/LightTheme/arrow-up.png");
+}
+
+QSpinBox[theme="light"]::down-arrow,
+QComboBox[theme="light"]::down-arrow {
+    image: url(":/icons/LightTheme/arrow-down.png");
+}
+
+QScrollBar[theme="light"]:vertical,
+QScrollBar[theme="light"]:horizontal {
+    background-color: transparent;
+}
+
+QScrollBar[theme="light"]::handle:vertical,
+QScrollBar[theme="light"]::handle:horizontal {
+    background-color: #CBD2E0;
+}
+
+QScrollBar[theme="light"]::handle:vertical:hover,
+QScrollBar[theme="light"]::handle:horizontal:hover {
+    background-color: #8B5CF6;
+}
+
 QCheckBox[theme="light"]::indicator,
 QRadioButton[theme="light"]::indicator {
     background-color: #FFFFFF;
@@ -936,4 +979,15 @@ QPushButton#danger_btn[theme="light"] {
     background-color: #FEF2F2;
     border-color: #FCA5A5;
     color: #B91C1C;
+}
+
+/* QWidget сбрасывает фон в transparent, поэтому диалогам нужен явный фон
+   после общих правил — иначе тёмная тема даёт чёрные полосы, а светлая
+   тема теряет фон вокруг шапки и футера. */
+QDialog {
+    background-color: #1E1E1E;
+}
+
+QDialog[theme="light"] {
+    background-color: #F5F6FA;
 }

@@ -12,7 +12,6 @@ from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsScene
 
 SAFE_AREA_COLOR = QColor("#8B5CF6")
-SAFE_AREA_UNDERLAY = QColor(255, 255, 255, 120)
 
 
 def safe_area_rect(width: int, height: int, margin: int) -> QRectF | None:
@@ -40,37 +39,25 @@ def add_safe_area(
     *,
     z: float = 10.0,
     color: QColor | None = None,
-    underlay_color: QColor | None = None,
 ) -> list[QGraphicsRectItem]:
-    """Добавляет в сцену аккуратную cosmetic-рамку полей для печати."""
+    """Добавляет в сцену тонкую сплошную рамку полей для печати."""
 
     rect = safe_area_rect(width, height, margin)
     if rect is None:
         return []
 
-    underlay = QGraphicsRectItem(rect)
-    underlay_pen = QPen(underlay_color or SAFE_AREA_UNDERLAY)
-    underlay_pen.setWidthF(2.4)
-    underlay_pen.setCosmetic(True)
-    underlay.setPen(underlay_pen)
-    underlay.setBrush(Qt.NoBrush)
-    underlay.setAcceptedMouseButtons(Qt.NoButton)
-    underlay.setZValue(z)
-    scene.addItem(underlay)
-
     line = QGraphicsRectItem(rect)
     line_pen = QPen(color or SAFE_AREA_COLOR)
-    line_pen.setWidthF(1.2)
+    line_pen.setWidthF(0.9)
     line_pen.setCosmetic(True)
-    line_pen.setStyle(Qt.DashLine)
-    line_pen.setDashPattern([5.0, 5.0])
+    line_pen.setStyle(Qt.SolidLine)
     line.setPen(line_pen)
     line.setBrush(Qt.NoBrush)
     line.setAcceptedMouseButtons(Qt.NoButton)
-    line.setZValue(z + 1)
+    line.setZValue(z)
     scene.addItem(line)
 
-    return [underlay, line]
+    return [line]
 
 
 def set_safe_area_visible(items: list[QGraphicsRectItem], visible: bool) -> None:

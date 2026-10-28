@@ -127,6 +127,7 @@ class PointPickerDialog(QDialog):
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setMouseTracking(True)
         self.view.setFrameShape(QFrame.NoFrame)
+        self.view.setToolTip(self._align_hint())
         self.view.setStyleSheet("QGraphicsView { background: transparent; border: none; }")
         self.view.viewport().setAutoFillBackground(False)
 
@@ -159,10 +160,6 @@ class PointPickerDialog(QDialog):
         self.info_label = QLabel()
         self.info_label.setObjectName("editor_info")
         self.info_label.setAlignment(Qt.AlignCenter)
-
-        self.hint_label = QLabel(self._align_hint())
-        self.hint_label.setObjectName("hint_label")
-        self.hint_label.setWordWrap(True)
 
         self._build_ui()
         self._apply_theme_to_children()
@@ -261,7 +258,6 @@ class PointPickerDialog(QDialog):
         inspector_layout.addLayout(
             self._field_row("Крестик", self._build_marker_color_row())
         )
-        inspector_layout.addWidget(self.hint_label)
 
         inspector_layout.addSpacing(6)
         inspector_layout.addWidget(self._heading("Печать"))
@@ -694,7 +690,7 @@ class PointPickerDialog(QDialog):
         self.align = align
         for value, button in self.align_buttons.items():
             button.setChecked(value == align)
-        self.hint_label.setText(self._align_hint())
+        self.view.setToolTip(self._align_hint())
         self.draw_marker()
 
     def _on_safe_area_toggled(self, checked: bool) -> None:
