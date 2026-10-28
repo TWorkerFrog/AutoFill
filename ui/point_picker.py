@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
@@ -152,6 +153,16 @@ class PointPickerDialog(QDialog):
         self.info_label = QLabel()
         self.info_label.setAlignment(Qt.AlignCenter)
 
+        self.align_combo = QComboBox()
+        self.align_combo.setObjectName("align_combo")
+        self.align_combo.setMinimumWidth(150)
+        self.align_combo.addItem("По левому краю", "left")
+        self.align_combo.addItem("По центру", "center")
+        self.align_combo.addItem("По правому краю", "right")
+        align_index = self.align_combo.findData(self.align)
+        if align_index >= 0:
+            self.align_combo.setCurrentIndex(align_index)
+
         zoom_layout = QHBoxLayout()
         btn_zoom_in = QPushButton("+")
         btn_zoom_in.setFixedWidth(40)
@@ -170,6 +181,9 @@ class PointPickerDialog(QDialog):
         btn_center = QPushButton("В центр")
         btn_center.clicked.connect(self.center_marker)
         zoom_layout.addWidget(btn_center)
+        zoom_layout.addSpacing(12)
+        zoom_layout.addWidget(QLabel("Выравнивание:"))
+        zoom_layout.addWidget(self.align_combo)
         zoom_layout.addStretch()
 
         self.ok_btn = QPushButton("Готово")
@@ -180,15 +194,10 @@ class PointPickerDialog(QDialog):
         self.ok_btn.clicked.connect(self.accept)
 
         layout = QVBoxLayout()
-        if self.align == "left":
-            hint = "Правая кнопка мыши — поставить точку (левый край блока)"
-        elif self.align == "right":
-            hint = "Правая кнопка мыши — поставить точку (правый край блока)"
-        else:
-            hint = "Правая кнопка мыши — поставить точку (центр блока)"
-        hint_label = QLabel(hint)
-        hint_label.setWordWrap(True)
-        layout.addWidget(hint_label)
+        self.hint_label = QLabel(self._align_hint())
+        self.hint_label.setWordWrap(True)
+        layout.addWidget(self.hint_label)
+        self.align_combo.currentIndexChanged.connect(self.on_align_changed)
         help_label = QLabel(
             "Красная пунктирная рамка — safe area. Текст рисуется в текущем шрифте и цвете. "
             "Левая кнопка — перемещать изображение | Колесо — зум | "
@@ -217,6 +226,24 @@ class PointPickerDialog(QDialog):
         super().showEvent(event)
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
         self.scale_factor = self.view.transform().m11()
+
+    def _align_hint(self) -> str:
+        if self.align == "left":
+            return "Правая кнопка мыши — поставить точку (левый край блока)"
+        if self.align == "right":
+            return "Правая кнопка мыши — поставить точку (правый край блока)"
+        return "Правая кнопка мыши — поставить точку (центр блока)"
+
+    def on_align_changed(self, _index: int = 0) -> None:
+        align = self.align_combo.currentData()
+        if align not in {"left", "center", "right"}:
+            return
+        self.align = align
+        self.hint_label.setText(self._align_hint())
+        self.draw_marker()
+
+    def get_align(self) -> str:
+        return self.align
 
     def _clamp_marker(self):
         self.marker_x = max(0, min(self.img_width - 1, int(self.marker_x)))

@@ -490,11 +490,11 @@ QMenu::item:selected {
 }
 
 QSplitter::handle {
-    background-color: #2A2A2A;
+    background-color: transparent;
 }
 
 QSplitter::handle:hover {
-    background-color: #7F43E3;
+    background-color: transparent;
 }
 
 QLabel#hint_label {
@@ -520,9 +520,8 @@ QPushButton#danger_btn:hover {
 }
 
 QFrame#preview_pane {
-    background-color: #2A2A2A;
-    border: 1px solid #3A3A3A;
-    border-radius: 10px;
+    background-color: transparent;
+    border: none;
 }
 
 QFrame#preview_pane QLabel {
@@ -551,7 +550,7 @@ QLabel#preview_image {
 }
 
 QFrame#preview_canvas {
-    background-color: #1B1B1B;
+    background-color: transparent;
     border: 1px solid #3A3A3A;
     border-radius: 8px;
 }
@@ -715,12 +714,12 @@ QMenu[theme="light"]::item:selected {
 }
 
 QSplitter[theme="light"]::handle {
-    background-color: #E0E0E0;
+    background-color: transparent;
 }
 
 QFrame#preview_pane[theme="light"] {
-    background-color: #E8E8E8;
-    border-color: #CCCCCC;
+    background-color: transparent;
+    border: none;
 }
 
 QLabel#preview_image[theme="light"] {
@@ -730,7 +729,7 @@ QLabel#preview_image[theme="light"] {
 }
 
 QFrame#preview_canvas[theme="light"] {
-    background-color: #E8E8E8;
+    background-color: transparent;
     border-color: #CCCCCC;
 }
 

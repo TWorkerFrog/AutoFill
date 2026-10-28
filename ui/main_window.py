@@ -308,7 +308,7 @@ class DiplomaGenerator(QMainWindow):
         self.letter_spacing_spin.setSuffix(" px")
         style_layout.addWidget(self.letter_spacing_spin)
         style_layout.addStretch()
-        grid.addRow("Параметры:", style_row)
+        grid.addRow(style_row)
         layout.addWidget(source_group)
 
         self.names_editor = NameListEditor(
@@ -1305,6 +1305,14 @@ class DiplomaGenerator(QMainWindow):
         self.apply_theme_to_dialog(dialog, self.current_theme)
         if dialog.exec() == QDialog.Accepted:
             x, y = dialog.get_point()
+            align = dialog.get_align()
+            align_button = {
+                "left": self.rb_left,
+                "center": self.rb_center,
+                "right": self.rb_right,
+            }.get(align)
+            if align_button is not None:
+                align_button.setChecked(True)
             # Выбор точки — это явное указание позиции, поэтому автоцентр
             # отключаем: иначе выбранные координаты молча игнорировались бы.
             self.x_auto_check.setChecked(False)
