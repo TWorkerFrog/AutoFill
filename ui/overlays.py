@@ -39,6 +39,8 @@ def add_safe_area(
     margin: int,
     *,
     z: float = 10.0,
+    color: QColor | None = None,
+    underlay_color: QColor | None = None,
 ) -> list[QGraphicsRectItem]:
     """Добавляет в сцену аккуратную cosmetic-рамку полей для печати."""
 
@@ -47,7 +49,7 @@ def add_safe_area(
         return []
 
     underlay = QGraphicsRectItem(rect)
-    underlay_pen = QPen(SAFE_AREA_UNDERLAY)
+    underlay_pen = QPen(underlay_color or SAFE_AREA_UNDERLAY)
     underlay_pen.setWidthF(2.4)
     underlay_pen.setCosmetic(True)
     underlay.setPen(underlay_pen)
@@ -57,7 +59,7 @@ def add_safe_area(
     scene.addItem(underlay)
 
     line = QGraphicsRectItem(rect)
-    line_pen = QPen(SAFE_AREA_COLOR)
+    line_pen = QPen(color or SAFE_AREA_COLOR)
     line_pen.setWidthF(1.2)
     line_pen.setCosmetic(True)
     line_pen.setStyle(Qt.DashLine)

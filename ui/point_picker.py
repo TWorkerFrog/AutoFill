@@ -51,6 +51,10 @@ class PointPickerDialog(QDialog):
         render_config: RenderConfig | None = None,
         preview_parts: Sequence[str] | None = None,
         safe_margin: int | None = None,
+        auto_x: bool = False,
+        auto_y: bool = False,
+        safe_area_color: tuple[int, int, int] | None = None,
+        marker_color: tuple[int, int, int] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Редактор грамоты")
@@ -58,6 +62,10 @@ class PointPickerDialog(QDialog):
 
         self.align = align
         self.point_changed = False
+        self.auto_x = bool(auto_x)
+        self.auto_y = bool(auto_y)
+        self.safe_area_color = tuple(safe_area_color or (139, 92, 246))
+        self.marker_color = tuple(marker_color or (139, 92, 246))
         self.render_config = render_config
         self.preview_parts = list(preview_parts or [])
         if safe_margin is None and render_config is not None:
@@ -134,6 +142,7 @@ class PointPickerDialog(QDialog):
             self.img_height,
             self.safe_margin,
             z=10,
+            color=QColor(*self.safe_area_color),
         )
         set_safe_area_visible(self.safe_area_items, self.safe_margin > 0)
 
@@ -142,7 +151,7 @@ class PointPickerDialog(QDialog):
         self._preview_timer.setInterval(60)
         self._preview_timer.timeout.connect(self._render_preview)
 
-        self.marker_pen = QPen(QColor("#8B5CF6"))
+        self.marker_pen = QPen(QColor(*self.marker_color))
         self.marker_pen.setWidth(3)
         self.marker_pen.setCosmetic(True)
         self.marker_lines = []
@@ -248,12 +257,19 @@ class PointPickerDialog(QDialog):
         inspector_layout.addSpacing(6)
         inspector_layout.addWidget(self._heading("Положение"))
         inspector_layout.addWidget(self._build_align_segments())
+        inspector_layout.addWidget(self._build_auto_row())
+        inspector_layout.addLayout(
+            self._field_row("Крестик", self._build_marker_color_row())
+        )
         inspector_layout.addWidget(self.hint_label)
 
         inspector_layout.addSpacing(6)
         inspector_layout.addWidget(self._heading("Печать"))
         inspector_layout.addLayout(self._build_margin_row())
-        self.safe_check = QCheckBox("Показывать поля")
+        inspector_layout.addLayout(
+            self._field_row("Линия", self._build_safe_color_row())
+        )
+        self.safe_check = QCheckBox("Показывать поля для печати")
         self.safe_check.setObjectName("safe_area_check")
         self.safe_check.setChecked(self.safe_margin > 0)
         self.safe_check.setToolTip(
@@ -263,10 +279,6 @@ class PointPickerDialog(QDialog):
         inspector_layout.addWidget(self.safe_check)
 
         inspector_layout.addStretch()
-        note = QLabel("Правый клик по грамоте ставит точку привязки текста.")
-        note.setObjectName("hint_label")
-        note.setWordWrap(True)
-        inspector_layout.addWidget(note)
         body.addWidget(inspector)
 
         root.addLayout(body, 1)
@@ -357,6 +369,74 @@ class PointPickerDialog(QDialog):
         layout.addWidget(self.color_label)
         layout.addStretch()
         self._set_color_button(self.text_color)
+        return row
+
+    def _build_auto_row(self) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        self.auto_x_check = QCheckBox("Авто по X")
+        self.auto_x_check.setToolTip("Центрировать текст по горизонтали, игнорируя X точки")
+        self.auto_x_check.setChecked(self.auto_x)
+        self.auto_x_check.toggled.connect(self._on_auto_changed)
+        layout.addWidget(self.auto_x_check)
+
+        self.auto_y_check = QCheckBox("Авто по Y")
+        self.auto_y_check.setToolTip("Центрировать текст по вертикали, игнорируя Y точки")
+        self.auto_y_check.setChecked(self.auto_y)
+        self.auto_y_check.toggled.connect(self._on_auto_changed)
+        layout.addWidget(self.auto_y_check)
+        layout.addStretch()
+        return row
+
+    def _build_marker_color_row(self) -> QWidget:
+        return self._build_color_control(
+            self.marker_color,
+            self.choose_marker_color,
+            "marker_color_button",
+            "marker_color_label",
+            "Выбрать цвет крестика",
+        )
+
+    def _build_safe_color_row(self) -> QWidget:
+        return self._build_color_control(
+            self.safe_area_color,
+            self.choose_safe_area_color,
+            "safe_color_button",
+            "safe_color_label",
+            "Выбрать цвет линии полей для печати",
+        )
+
+    def _build_color_control(
+        self,
+        color: tuple[int, int, int],
+        callback,
+        button_name: str,
+        label_name: str,
+        tooltip: str,
+    ) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        button = QPushButton()
+        button.setObjectName("color_swatch")
+        button.setFixedSize(30, 30)
+        button.setToolTip(tooltip)
+        button.clicked.connect(callback)
+        layout.addWidget(button)
+
+        label = QLabel()
+        label.setObjectName("secondary_label")
+        layout.addWidget(label)
+        layout.addStretch()
+
+        setattr(self, button_name, button)
+        setattr(self, label_name, label)
+        self._set_color_control(button, label, color)
         return row
 
     def _build_align_segments(self) -> QWidget:
@@ -493,6 +573,48 @@ class PointPickerDialog(QDialog):
         self.color_button.setStyleSheet(f"background-color: {value};")
         self.color_label.setText(value.upper())
 
+    @staticmethod
+    def _set_color_control(button: QPushButton, label: QLabel, color) -> None:
+        value = QColor(*color).name()
+        button.setStyleSheet(f"background-color: {value};")
+        label.setText(value.upper())
+
+    def _pick_color(self, current, title: str) -> tuple[int, int, int] | None:
+        color = QColorDialog.getColor(
+            QColor(*current),
+            self,
+            title,
+            QColorDialog.DontUseNativeDialog,
+        )
+        if not color.isValid():
+            return None
+        return color.red(), color.green(), color.blue()
+
+    def choose_marker_color(self) -> None:
+        selected = self._pick_color(self.marker_color, "Цвет крестика")
+        if selected is None:
+            return
+        self.marker_color = selected
+        self._set_color_control(
+            self.marker_color_button,
+            self.marker_color_label,
+            self.marker_color,
+        )
+        self.marker_pen.setColor(QColor(*self.marker_color))
+        self.draw_marker()
+
+    def choose_safe_area_color(self) -> None:
+        selected = self._pick_color(self.safe_area_color, "Цвет полей для печати")
+        if selected is None:
+            return
+        self.safe_area_color = selected
+        self._set_color_control(
+            self.safe_color_button,
+            self.safe_color_label,
+            self.safe_area_color,
+        )
+        self._rebuild_safe_area()
+
     def choose_color(self) -> None:
         if self.render_config is None:
             return
@@ -527,6 +649,7 @@ class PointPickerDialog(QDialog):
             self.img_height,
             self.safe_margin,
             z=10,
+            color=QColor(*self.safe_area_color),
         )
         set_safe_area_visible(
             self.safe_area_items,
@@ -577,8 +700,27 @@ class PointPickerDialog(QDialog):
     def _on_safe_area_toggled(self, checked: bool) -> None:
         set_safe_area_visible(self.safe_area_items, checked and self.safe_margin > 0)
 
+    def _on_auto_changed(self, _checked: bool = False) -> None:
+        if self.auto_x_check.isChecked():
+            self.marker_x = self.img_width // 2
+        if self.auto_y_check.isChecked():
+            self.marker_y = self.img_height // 2
+        self.draw_marker()
+
     def get_align(self) -> str:
         return self.align
+
+    def get_auto_x(self) -> bool:
+        return self.auto_x_check.isChecked()
+
+    def get_auto_y(self) -> bool:
+        return self.auto_y_check.isChecked()
+
+    def get_safe_area_color(self) -> tuple[int, int, int]:
+        return tuple(self.safe_area_color)
+
+    def get_marker_color(self) -> tuple[int, int, int]:
+        return tuple(self.marker_color)
 
     def _clamp_marker(self):
         self.marker_x = max(0, min(self.img_width - 1, int(self.marker_x)))
@@ -628,8 +770,16 @@ class PointPickerDialog(QDialog):
         if self.preview_config is not None and self.preview_font is not None and self.preview_parts:
             config = replace(
                 self.preview_config,
-                x=self.marker_x * self.display_scale,
-                y=self.marker_y * self.display_scale,
+                x=(
+                    "center"
+                    if self.auto_x_check.isChecked()
+                    else self.marker_x * self.display_scale
+                ),
+                y=(
+                    "center"
+                    if self.auto_y_check.isChecked()
+                    else self.marker_y * self.display_scale
+                ),
                 align=self.align,
             )
             try:
@@ -655,12 +805,16 @@ class PointPickerDialog(QDialog):
             step = 1
 
         if event.key() == Qt.Key_Left:
+            self.auto_x_check.setChecked(False)
             self.marker_x -= step
         elif event.key() == Qt.Key_Right:
+            self.auto_x_check.setChecked(False)
             self.marker_x += step
         elif event.key() == Qt.Key_Up:
+            self.auto_y_check.setChecked(False)
             self.marker_y -= step
         elif event.key() == Qt.Key_Down:
+            self.auto_y_check.setChecked(False)
             self.marker_y += step
         else:
             QGraphicsView.keyPressEvent(self.view, event)
@@ -739,7 +893,7 @@ class PointPickerDialog(QDialog):
 
         dot = QGraphicsEllipseItem(self.marker_x - 3, self.marker_y - 3, 6, 6)
         dot.setPen(self.marker_pen)
-        dot.setBrush(QBrush(QColor("#8B5CF6")))
+        dot.setBrush(QBrush(QColor(*self.marker_color)))
         dot.setZValue(20)
         self.scene.addItem(dot)
         self.marker_lines.append(dot)
@@ -754,6 +908,8 @@ class PointPickerDialog(QDialog):
 
     def on_mouse_press(self, event):
         if event.button() == Qt.RightButton:
+            self.auto_x_check.setChecked(False)
+            self.auto_y_check.setChecked(False)
             scene_pos = self.view.mapToScene(event.position().toPoint())
             self.marker_x = int(scene_pos.x())
             self.marker_y = int(scene_pos.y())

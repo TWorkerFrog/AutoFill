@@ -45,6 +45,8 @@ class AppSettings:
     y_offset: int = 0
     line_spacing: int = 4
     margin: int = 36
+    safe_area_color: tuple[int, int, int] = (139, 92, 246)
+    marker_color: tuple[int, int, int] = (139, 92, 246)
     align: str = "left"
     name_mode: str = "single_line"
     split_after: int = 1
@@ -138,6 +140,10 @@ def normalize_settings(raw: dict[str, Any] | None) -> AppSettings:
         data.get("split_after", defaults.split_after), 1, 30, defaults.split_after,
     )
     data["text_color"] = _parse_color(data.get("text_color", defaults.text_color))
+    data["safe_area_color"] = _parse_color(
+        data.get("safe_area_color", defaults.safe_area_color)
+    )
+    data["marker_color"] = _parse_color(data.get("marker_color", defaults.marker_color))
 
     if not isinstance(data.get("align"), str) or data["align"] not in {"left", "center", "right"}:
         data["align"] = defaults.align

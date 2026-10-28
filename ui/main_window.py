@@ -81,6 +81,8 @@ class DiplomaGenerator(QMainWindow):
         self.selected_font_family = settings.selected_font_family
         self.selected_font_style = settings.selected_font_style
         self.text_color = tuple(settings.text_color)
+        self.safe_area_color = tuple(settings.safe_area_color)
+        self.marker_color = tuple(settings.marker_color)
         self.current_theme = self._resolve_theme(settings.theme)
 
         self.fonts_data = scan_fonts()
@@ -654,6 +656,8 @@ class DiplomaGenerator(QMainWindow):
             self.font_size_spin.setValue(settings.font_size)
             self.letter_spacing_spin.setValue(settings.letter_spacing)
             self.text_color = tuple(settings.text_color)
+            self.safe_area_color = tuple(settings.safe_area_color)
+            self.marker_color = tuple(settings.marker_color)
             self._set_color_preview(self.text_color)
 
             self.x_edit.setValue(settings.x)
@@ -739,6 +743,8 @@ class DiplomaGenerator(QMainWindow):
             y_offset=self.y_offset_spin.value(),
             line_spacing=self.line_spacing_spin.value(),
             margin=self.margin_spin.value(),
+            safe_area_color=tuple(self.safe_area_color),
+            marker_color=tuple(self.marker_color),
             align=self.get_align(),
             name_mode=self.get_name_mode(),
             split_after=self.split_after_spin.value(),
@@ -837,7 +843,7 @@ class DiplomaGenerator(QMainWindow):
         self.style().polish(self)
 
         if theme == "dark":
-            set_title_bar_color(self, "#0E1117")
+            set_title_bar_color(self, "#1E1E1E")
             set_title_bar_light_theme(self, False)
         else:
             set_title_bar_color(self, "#F5F6FA")
@@ -856,7 +862,7 @@ class DiplomaGenerator(QMainWindow):
         dialog.style().unpolish(dialog)
         dialog.style().polish(dialog)
         if theme == "dark":
-            set_title_bar_color(dialog, "#0E1117")
+            set_title_bar_color(dialog, "#1E1E1E")
             set_title_bar_light_theme(dialog, False)
         else:
             set_title_bar_color(dialog, "#F5F6FA")
@@ -1304,6 +1310,10 @@ class DiplomaGenerator(QMainWindow):
                 render_config=render_config,
                 preview_parts=preview_parts,
                 safe_margin=self.margin_spin.value(),
+                auto_x=self.x_auto_check.isChecked(),
+                auto_y=self.y_auto_check.isChecked(),
+                safe_area_color=self.safe_area_color,
+                marker_color=self.marker_color,
             )
         except Exception as exc:
             self._error(f"Не удалось открыть шаблон: {exc}")
@@ -1327,14 +1337,15 @@ class DiplomaGenerator(QMainWindow):
         if align_button is not None:
             align_button.setChecked(True)
 
-        # Если точку действительно меняли, автоцентр отключаем: иначе
-        # выбранные координаты молча игнорировались бы. При простом изменении
-        # шрифта или цвета автоцентр сохраняется.
-        if getattr(dialog, "point_changed", True):
+        if hasattr(dialog, "get_auto_x") and hasattr(dialog, "get_auto_y"):
+            self.x_auto_check.setChecked(dialog.get_auto_x())
+            self.y_auto_check.setChecked(dialog.get_auto_y())
+        elif getattr(dialog, "point_changed", True):
+            # Старые/тестовые диалоги без галочек автоцентра.
             self.x_auto_check.setChecked(False)
             self.y_auto_check.setChecked(False)
-            self.x_edit.setValue(max(0, x))
-            self.y_edit.setValue(max(0, y))
+        self.x_edit.setValue(max(0, x))
+        self.y_edit.setValue(max(0, y))
 
         has_style = getattr(dialog, "render_config", None) is not None
         if has_style and hasattr(dialog, "get_font_size"):
@@ -1346,6 +1357,10 @@ class DiplomaGenerator(QMainWindow):
             self.letter_spacing_spin.setValue(dialog.get_letter_spacing())
         if hasattr(dialog, "get_margin"):
             self.margin_spin.setValue(dialog.get_margin())
+        if hasattr(dialog, "get_safe_area_color"):
+            self.safe_area_color = tuple(dialog.get_safe_area_color())
+        if hasattr(dialog, "get_marker_color"):
+            self.marker_color = tuple(dialog.get_marker_color())
         self._schedule_preview()
 
     def show_preview_dialog(self, people=None) -> int:

@@ -16,6 +16,8 @@ class SettingsTests(unittest.TestCase):
                 template_path="C:/tmp/template.png",
                 font_size=72,
                 text_color=(12, 34, 56),
+                safe_area_color=(1, 2, 3),
+                marker_color=(4, 5, 6),
                 x_auto=False,
                 x=321,
                 name_mode="auto",
@@ -28,6 +30,8 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(loaded.template_path, source.template_path)
             self.assertEqual(loaded.font_size, 72)
             self.assertEqual(loaded.text_color, (12, 34, 56))
+            self.assertEqual(loaded.safe_area_color, (1, 2, 3))
+            self.assertEqual(loaded.marker_color, (4, 5, 6))
             self.assertFalse(loaded.x_auto)
             self.assertEqual(loaded.x, 321)
             self.assertEqual(loaded.name_mode, "auto")
@@ -42,6 +46,8 @@ class SettingsTests(unittest.TestCase):
                 "output_format": "docx",
                 "theme": "neon",
                 "text_color": "#112233",
+                "safe_area_color": "#AABBCC",
+                "marker_color": [1, 2, 3],
                 "splitter_sizes": ["bad", 10],
             }
         )
@@ -51,6 +57,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.output_format, "pdf")
         self.assertEqual(settings.theme, "dark")
         self.assertEqual(settings.text_color, (17, 34, 51))
+        self.assertEqual(settings.safe_area_color, (170, 187, 204))
+        self.assertEqual(settings.marker_color, (1, 2, 3))
         self.assertEqual(settings.splitter_sizes, [10])
 
     def test_normalize_arbitrary_invalid_types(self):
