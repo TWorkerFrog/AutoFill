@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -153,10 +154,12 @@ class DiplomaGenerator(QMainWindow):
         self.main_splitter.addWidget(self.tabs)
 
         self.preview_pane = PreviewPane()
+        self.preview_pane.setMinimumWidth(280)
         self.preview_pane.openRequested.connect(self.open_preview)
         self.main_splitter.addWidget(self.preview_pane)
         self.main_splitter.setStretchFactor(0, 1)
         self.main_splitter.setStretchFactor(1, 0)
+        self.main_splitter.setCollapsible(1, False)
         self.main_splitter.setSizes([780, 380])
         main_layout.addWidget(self.main_splitter, 1)
 
@@ -169,7 +172,7 @@ class DiplomaGenerator(QMainWindow):
         bottom = QFrame()
         bottom.setObjectName("action_bar")
         bottom_layout = QHBoxLayout(bottom)
-        bottom_layout.setContentsMargins(14, 8, 8, 8)
+        bottom_layout.setContentsMargins(14, 8, 14, 8)
         bottom_layout.setSpacing(10)
 
         self.status_label = QLabel("Готов к работе")
@@ -241,49 +244,45 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_main(self) -> None:
         layout = QVBoxLayout(self.tab_main)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
         layout.setSpacing(10)
 
         source_group = QGroupBox("Шаблон и шрифт")
-        grid = QFormLayout(source_group)
-        grid.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        grid.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid = QGridLayout(source_group)
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(10)
+        grid.setColumnStretch(1, 1)
 
-        template_row = QWidget()
-        template_layout = QHBoxLayout(template_row)
-        template_layout.setContentsMargins(0, 0, 0, 0)
         self.template_edit = QLineEdit()
         self.template_edit.setPlaceholderText("Путь до файла с грамотой (JPG/PNG)…")
+        self.template_edit.setMinimumWidth(0)
         self.template_edit.textChanged.connect(self._on_template_changed)
-        template_layout.addWidget(self.template_edit, 1)
+        grid.addWidget(QLabel("Шаблон:"), 0, 0)
+        grid.addWidget(self.template_edit, 0, 1, 1, 2)
         btn_template = QPushButton("Выбрать")
         btn_template.setObjectName("link_btn")
         btn_template.clicked.connect(self.choose_template)
-        template_layout.addWidget(btn_template)
-        grid.addRow("Шаблон:", template_row)
+        grid.addWidget(btn_template, 0, 3)
 
-        font_row = QWidget()
-        font_layout = QHBoxLayout(font_row)
-        font_layout.setContentsMargins(0, 0, 0, 0)
         self.font_edit = QLineEdit()
         self.font_edit.setPlaceholderText("Название шрифта или путь к TTF/OTF…")
+        self.font_edit.setMinimumWidth(0)
         self.font_edit.textChanged.connect(self._on_font_text_changed)
         self.font_edit.returnPressed.connect(self.normalize_font_input)
         self.font_edit.editingFinished.connect(self.normalize_font_input)
-        font_layout.addWidget(self.font_edit, 1)
+        grid.addWidget(QLabel("Шрифт:"), 1, 0)
+        grid.addWidget(self.font_edit, 1, 1)
 
         self.style_combo = QComboBox()
-        self.style_combo.setMinimumWidth(130)
+        self.style_combo.setFixedWidth(120)
         self.style_combo.currentTextChanged.connect(self._on_style_changed)
-        font_layout.addWidget(self.style_combo)
+        grid.addWidget(self.style_combo, 1, 2)
 
         btn_font_file = QPushButton("Файл")
         btn_font_file.setObjectName("link_btn")
         btn_font_file.clicked.connect(self.choose_font_file)
-        font_layout.addWidget(btn_font_file)
-        grid.addRow("Шрифт:", font_row)
+        grid.addWidget(btn_font_file, 1, 3)
 
         self.completer = QCompleter(sorted(self.fonts_data.keys()))
         self.completer.setCaseSensitivity(Qt.CaseInsensitive)
@@ -296,7 +295,6 @@ class DiplomaGenerator(QMainWindow):
         style_layout.setContentsMargins(0, 0, 0, 0)
         style_layout.setSpacing(8)
         size_label = QLabel("Размер:")
-        size_label.setObjectName("field_label")
         style_layout.addWidget(size_label)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(1, 2000)
@@ -307,7 +305,6 @@ class DiplomaGenerator(QMainWindow):
 
         style_layout.addSpacing(10)
         color_label = QLabel("Цвет:")
-        color_label.setObjectName("field_label")
         style_layout.addWidget(color_label)
         self.color_preview = QPushButton()
         self.color_preview.setObjectName("color_swatch")
@@ -319,7 +316,6 @@ class DiplomaGenerator(QMainWindow):
 
         style_layout.addSpacing(10)
         letter_label = QLabel("Интервал:")
-        letter_label.setObjectName("field_label")
         letter_label.setToolTip("Межбуквенный интервал")
         style_layout.addWidget(letter_label)
         self.letter_spacing_spin = QSpinBox()
@@ -329,7 +325,7 @@ class DiplomaGenerator(QMainWindow):
         self.letter_spacing_spin.setFixedWidth(96)
         style_layout.addWidget(self.letter_spacing_spin)
         style_layout.addStretch()
-        grid.addRow(style_row)
+        grid.addWidget(style_row, 2, 0, 1, 4)
         layout.addWidget(source_group)
 
         self.names_editor = NameListEditor(
@@ -368,7 +364,7 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_position(self) -> None:
         layout = QVBoxLayout(self.tab_position)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
         layout.setSpacing(10)
 
         align_group = QGroupBox("Привязка блока")
@@ -454,7 +450,7 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_format(self) -> None:
         layout = QVBoxLayout(self.tab_format)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
         layout.setSpacing(10)
 
         mode_group = QGroupBox("Режим формирования ФИО")
@@ -501,7 +497,7 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_output(self) -> None:
         layout = QVBoxLayout(self.tab_output)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
         layout.setSpacing(10)
 
         format_group = QGroupBox("Формат")
@@ -584,7 +580,7 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_settings(self) -> None:
         layout = QVBoxLayout(self.tab_settings)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
         layout.setSpacing(10)
 
         theme_group = QGroupBox("Тема оформления")
