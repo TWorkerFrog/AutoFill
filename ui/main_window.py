@@ -732,7 +732,7 @@ class DiplomaGenerator(QMainWindow):
         finally:
             self._loading_settings = False
 
-    def save_settings(self) -> bool:
+    def save_settings(self, *, silent: bool = False) -> bool:
         def geometry_text(obj) -> str:
             return bytes(obj.saveGeometry().toBase64()).decode("ascii")
 
@@ -773,7 +773,8 @@ class DiplomaGenerator(QMainWindow):
         )
         try:
             self.settings_store.save(settings)
-            self.status_label.setText("Настройки сохранены")
+            if not silent:
+                self.status_label.setText("Настройки сохранены")
             return True
         except OSError as exc:
             self._message("Ошибка сохранения", str(exc), [("ОК", "primary")])
@@ -1379,6 +1380,9 @@ class DiplomaGenerator(QMainWindow):
             self.safe_area_color = tuple(dialog.get_safe_area_color())
         if hasattr(dialog, "get_marker_color"):
             self.marker_color = tuple(dialog.get_marker_color())
+        # Цвета крестика и линии полей должны переживать закрытие приложения,
+        # даже если пользователь потом выйдет без отдельного сохранения.
+        self.save_settings(silent=True)
         self._schedule_preview()
 
     def show_preview_dialog(self, people=None) -> int:
