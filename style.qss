@@ -6,7 +6,7 @@ QMainWindow {
     background-color: #222222;
 }
 
-QLineEdit, QTextEdit, QSpinBox, QComboBox {
+QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QComboBox {
     selection-background-color: #7F43E3;
     selection-color: #F2F2F2;
 }
@@ -68,7 +68,7 @@ QPushButton#primary_btn:hover {
     background-color: #AD83F3;
 }
 
-QLineEdit, QTextEdit, QSpinBox {
+QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox {
     background-color: #2A2A2A;
     color: #F2F2F2;
     border: 1px solid #3A3A3A;
@@ -76,7 +76,7 @@ QLineEdit, QTextEdit, QSpinBox {
     border-radius: 4px;
 }
 
-QLineEdit:focus, QTextEdit:focus, QSpinBox:focus {
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus {
     border-color: #7F43E3;
 }
 
@@ -223,10 +223,6 @@ QListView::item:selected {
     color: #F2F2F2;
 }
 
-QHBoxLayout {
-    spacing: 5px;
-}
-
 /* ============================================
    СВЕТЛАЯ ТЕМА
    ============================================ */
@@ -235,7 +231,7 @@ QMainWindow[theme="light"] {
     background-color: #F2F2F2;
 }
 
-QLineEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"], QComboBox[theme="light"] {
+QLineEdit[theme="light"], QPlainTextEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"], QComboBox[theme="light"] {
     selection-background-color: #7F43E3;
     selection-color: #F2F2F2;
 }
@@ -276,7 +272,7 @@ QPushButton[theme="light"]:pressed {
     color: #F2F2F2;
 }
 
-QPushButton[theme="light"]#primary_btn {
+QPushButton#primary_btn[theme="light"] {
     background-color: #7F43E3;
     color: #F2F2F2;
     font-weight: bold;
@@ -285,7 +281,11 @@ QPushButton[theme="light"]#primary_btn {
     border: none;
 }
 
-QLineEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"] {
+QPushButton#primary_btn[theme="light"]:hover {
+    background-color: #AD83F3;
+}
+
+QLineEdit[theme="light"], QPlainTextEdit[theme="light"], QTextEdit[theme="light"], QSpinBox[theme="light"] {
     background-color: #F2F2F2;
     color: #0D0D0D;
     border: 1px solid #CCCCCC;
@@ -416,6 +416,240 @@ QListView[theme="light"]::item:selected {
     color: #F2F2F2;
 }
 
-QHBoxLayout[theme="light"] {
-    spacing: 5px;
+/* ============================================
+   ОБЩИЕ КОМПОНЕНТЫ (РЕФАКТОРИНГ)
+   ============================================ */
+
+QGroupBox {
+    border: 1px solid #3A3A3A;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding: 12px 8px 8px 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 5px;
+    color: #AD83F3;
+    font-weight: bold;
+}
+
+QPlainTextEdit {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+QPlainTextEdit:focus {
+    border-color: #7F43E3;
+}
+
+QProgressBar {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    border-radius: 5px;
+    text-align: center;
+    min-height: 16px;
+}
+
+QProgressBar::chunk {
+    background-color: #7F43E3;
+    border-radius: 4px;
+}
+
+QToolTip {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #7F43E3;
+    padding: 4px;
+}
+
+QMenuBar {
+    background-color: #222222;
+    color: #F2F2F2;
+}
+
+QMenuBar::item:selected {
+    background-color: #3A3A3A;
+}
+
+QMenu {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+}
+
+QMenu::item:selected {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QSplitter::handle {
+    background-color: #2A2A2A;
+}
+
+QSplitter::handle:hover {
+    background-color: #7F43E3;
+}
+
+QLabel#hint_label {
+    color: #9A9A9A;
+    font-size: 12px;
+}
+
+QLabel#secondary_label {
+    color: #9A9A9A;
+}
+
+QLabel#status_label {
+    color: #CFCFCF;
+}
+
+QPushButton#danger_btn {
+    background-color: #5A2A2A;
+    border-color: #7A3A3A;
+}
+
+QPushButton#danger_btn:hover {
+    background-color: #7A3A3A;
+}
+
+QFrame#preview_pane {
+    background-color: #2A2A2A;
+    border: 1px solid #3A3A3A;
+    border-radius: 10px;
+}
+
+QFrame#preview_pane QLabel {
+    background-color: transparent;
+}
+
+QTextBrowser {
+    background-color: #2A2A2A;
+    color: #F2F2F2;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+QLabel#preview_title {
+    color: #AD83F3;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QLabel#preview_image {
+    background-color: #1B1B1B;
+    border: 1px solid #3A3A3A;
+    border-radius: 6px;
+    padding: 6px;
+    color: #9A9A9A;
+}
+
+QPushButton:disabled, QLineEdit:disabled, QPlainTextEdit:disabled,
+QSpinBox:disabled, QComboBox:disabled, QCheckBox:disabled,
+QRadioButton:disabled, QLabel:disabled {
+    color: #777777;
+    background-color: #292929;
+}
+
+QCheckBox[theme="light"]::indicator:disabled,
+QRadioButton[theme="light"]::indicator:disabled {
+    background-color: #E0E0E0;
+}
+
+/* --- светлая тема: дополнительные компоненты --- */
+
+QGroupBox[theme="light"] {
+    border-color: #CCCCCC;
+}
+
+QGroupBox[theme="light"]::title {
+    color: #7F43E3;
+}
+
+QPlainTextEdit[theme="light"] {
+    background-color: #FFFFFF;
+    color: #0D0D0D;
+    border-color: #CCCCCC;
+}
+
+QPlainTextEdit[theme="light"]:focus {
+    border-color: #7F43E3;
+}
+
+QTextBrowser[theme="light"] {
+    background-color: #FFFFFF;
+    color: #0D0D0D;
+    border-color: #CCCCCC;
+}
+
+QProgressBar[theme="light"] {
+    background-color: #E0E0E0;
+    color: #0D0D0D;
+    border-color: #CCCCCC;
+}
+
+QProgressBar[theme="light"]::chunk {
+    background-color: #7F43E3;
+}
+
+QToolTip[theme="light"] {
+    background-color: #FFFFFF;
+    color: #0D0D0D;
+    border-color: #7F43E3;
+}
+
+QMenuBar[theme="light"] {
+    background-color: #F2F2F2;
+    color: #0D0D0D;
+}
+
+QMenuBar[theme="light"]::item:selected {
+    background-color: #D0D0D0;
+}
+
+QMenu[theme="light"] {
+    background-color: #FFFFFF;
+    color: #0D0D0D;
+    border-color: #CCCCCC;
+}
+
+QMenu[theme="light"]::item:selected {
+    background-color: #7F43E3;
+    color: #F2F2F2;
+}
+
+QSplitter[theme="light"]::handle {
+    background-color: #E0E0E0;
+}
+
+QFrame#preview_pane[theme="light"] {
+    background-color: #E8E8E8;
+    border-color: #CCCCCC;
+}
+
+QLabel#preview_image[theme="light"] {
+    background-color: #D8D8D8;
+    border-color: #BBBBBB;
+    color: #666666;
+}
+
+QLabel#hint_label[theme="light"],
+QLabel#secondary_label[theme="light"] {
+    color: #666666;
+}
+
+QLabel#status_label[theme="light"] {
+    color: #333333;
+}
+
+QPushButton#danger_btn[theme="light"] {
+    background-color: #F5DCDC;
+    border-color: #D9A0A0;
 }
