@@ -329,7 +329,6 @@ class PointPickerDialog(QDialog):
     def _build_font_size_spin(self) -> QSpinBox:
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(1, 2000)
-        self.font_size_spin.setSuffix(" px")
         self.font_size_spin.setValue(
             self.render_config.font_size if self.render_config is not None else 100
         )
@@ -374,7 +373,9 @@ class PointPickerDialog(QDialog):
         layout.setSpacing(14)
 
         self.auto_x_check = QCheckBox("Авто по X")
-        self.auto_x_check.setToolTip("Центрировать текст по горизонтали, игнорируя X точки")
+        self.auto_x_check.setToolTip(
+            "Автопозиция по X: прижать блок к выбранному краю или центру"
+        )
         self.auto_x_check.setChecked(self.auto_x)
         self.auto_x_check.toggled.connect(self._on_auto_changed)
         layout.addWidget(self.auto_x_check)
@@ -385,6 +386,12 @@ class PointPickerDialog(QDialog):
         self.auto_y_check.toggled.connect(self._on_auto_changed)
         layout.addWidget(self.auto_y_check)
         layout.addStretch()
+
+        # Начальные координаты маркера должны соответствовать включённым авто-режимам.
+        if self.auto_x_check.isChecked():
+            self.marker_x = self._auto_x_anchor()
+        if self.auto_y_check.isChecked():
+            self.marker_y = self.img_height // 2
         return row
 
     def _build_marker_color_row(self) -> QWidget:
@@ -561,8 +568,11 @@ class PointPickerDialog(QDialog):
 
     def _on_margin_changed(self, value: int) -> None:
         self.safe_margin = max(0, int(value))
+        if self.auto_x_check.isChecked():
+            self.marker_x = self._auto_x_anchor()
         self._rebuild_safe_area()
         self._refresh_render_config()
+        self.draw_marker()
 
     def _set_color_button(self, color: tuple[int, int, int]) -> None:
         value = QColor(*color).name()
@@ -690,15 +700,24 @@ class PointPickerDialog(QDialog):
         self.align = align
         for value, button in self.align_buttons.items():
             button.setChecked(value == align)
+        if self.auto_x_check.isChecked():
+            self.marker_x = self._auto_x_anchor()
         self.view.setToolTip(self._align_hint())
         self.draw_marker()
 
     def _on_safe_area_toggled(self, checked: bool) -> None:
         set_safe_area_visible(self.safe_area_items, checked and self.safe_margin > 0)
 
+    def _auto_x_anchor(self) -> int:
+        if self.align == "left":
+            return max(0, min(self.img_width, self.safe_margin))
+        if self.align == "right":
+            return max(0, min(self.img_width, self.img_width - self.safe_margin))
+        return self.img_width // 2
+
     def _on_auto_changed(self, _checked: bool = False) -> None:
         if self.auto_x_check.isChecked():
-            self.marker_x = self.img_width // 2
+            self.marker_x = self._auto_x_anchor()
         if self.auto_y_check.isChecked():
             self.marker_y = self.img_height // 2
         self.draw_marker()
@@ -767,7 +786,7 @@ class PointPickerDialog(QDialog):
             config = replace(
                 self.preview_config,
                 x=(
-                    "center"
+                    self._auto_x_anchor() * self.display_scale
                     if self.auto_x_check.isChecked()
                     else self.marker_x * self.display_scale
                 ),

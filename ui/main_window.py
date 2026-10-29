@@ -5,7 +5,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from PIL import ImageFont
-from PySide6.QtCore import QByteArray, QStandardPaths, Qt, QThread, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QEvent, QStandardPaths, Qt, QThread, QTimer, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -114,6 +114,22 @@ class DiplomaGenerator(QMainWindow):
         super().showEvent(event)
         # Нативный заголовок можно перекрасить только после создания HWND.
         self._apply_theme(self.current_theme)
+        self._place_help_button()
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self.tabs and event.type() == QEvent.Resize:
+            self._place_help_button()
+        return super().eventFilter(watched, event)
+
+    def _place_help_button(self) -> None:
+        button = getattr(self, "help_btn", None)
+        if button is None:
+            return
+        margin = 6
+        x = max(0, self.tabs.width() - button.width() - margin)
+        y = max(0, (self.tabs.tabBar().height() - button.height()) // 2)
+        button.move(x, y)
+        button.raise_()
 
     # ------------------------------------------------------------------
     # Построение интерфейса
@@ -144,12 +160,13 @@ class DiplomaGenerator(QMainWindow):
         self.tabs.addTab(self.tab_output, "Вывод")
         self.tabs.addTab(self.tab_settings, "Настройки")
 
-        help_btn = QPushButton("?")
+        help_btn = QPushButton("?", self.tabs)
         help_btn.setObjectName("help_btn")
         help_btn.setFixedSize(26, 26)
         help_btn.setToolTip("Инструкция")
         help_btn.clicked.connect(self.show_help)
-        self.tabs.setCornerWidget(help_btn, Qt.TopRightCorner)
+        self.help_btn = help_btn
+        self.tabs.installEventFilter(self)
 
         self.main_splitter.addWidget(self.tabs)
 
@@ -258,7 +275,8 @@ class DiplomaGenerator(QMainWindow):
         self.template_edit.setPlaceholderText("Путь до файла с грамотой (JPG/PNG)…")
         self.template_edit.setMinimumWidth(0)
         self.template_edit.textChanged.connect(self._on_template_changed)
-        grid.addWidget(QLabel("Шаблон:"), 0, 0)
+        template_label = QLabel("Шаблон:")
+        grid.addWidget(template_label, 0, 0)
         grid.addWidget(self.template_edit, 0, 1, 1, 2)
         btn_template = QPushButton("Выбрать")
         btn_template.setObjectName("link_btn")
@@ -271,7 +289,8 @@ class DiplomaGenerator(QMainWindow):
         self.font_edit.textChanged.connect(self._on_font_text_changed)
         self.font_edit.returnPressed.connect(self.normalize_font_input)
         self.font_edit.editingFinished.connect(self.normalize_font_input)
-        grid.addWidget(QLabel("Шрифт:"), 1, 0)
+        font_label = QLabel("Шрифт:")
+        grid.addWidget(font_label, 1, 0)
         grid.addWidget(self.font_edit, 1, 1)
 
         self.style_combo = QComboBox()
@@ -293,13 +312,19 @@ class DiplomaGenerator(QMainWindow):
         style_row = QWidget()
         style_layout = QHBoxLayout(style_row)
         style_layout.setContentsMargins(0, 0, 0, 0)
-        style_layout.setSpacing(8)
+        style_layout.setSpacing(12)
         size_label = QLabel("Размер:")
+        label_width = max(
+            template_label.sizeHint().width(),
+            font_label.sizeHint().width(),
+            size_label.sizeHint().width(),
+        )
+        grid.setColumnMinimumWidth(0, label_width)
+        size_label.setFixedWidth(label_width)
         style_layout.addWidget(size_label)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(1, 2000)
         self.font_size_spin.setValue(100)
-        self.font_size_spin.setSuffix(" px")
         self.font_size_spin.setFixedWidth(96)
         style_layout.addWidget(self.font_size_spin)
 
