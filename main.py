@@ -51,7 +51,7 @@ def install_exception_hook() -> None:
         log.critical("Необработанное исключение", exc_info=(exc_type, exc_value, exc_tb))
         QMessageBox.critical(
             None,
-            f"{APP_NAME} — ошибка",
+            f"{APP_NAME}: ошибка",
             f"Произошла непредвиденная ошибка:\n\n{exc_value}\n\n"
             "Подробности записаны в журнал приложения.",
         )

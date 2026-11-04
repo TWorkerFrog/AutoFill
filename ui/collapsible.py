@@ -29,7 +29,7 @@ class CollapsibleSection(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(8)
         layout.addWidget(self.toggle_button)
         layout.addWidget(content, 1)
 

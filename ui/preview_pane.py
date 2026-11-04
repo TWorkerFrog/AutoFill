@@ -23,8 +23,8 @@ class PreviewPane(QFrame):
         self._original: QPixmap | None = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 14, 12, 14)
+        layout.setSpacing(12)
 
         header = QHBoxLayout()
         header.setSpacing(6)
@@ -56,7 +56,7 @@ class PreviewPane(QFrame):
         canvas_layout.addWidget(self.image_label)
         layout.addWidget(self.canvas, 1)
 
-        self.hint_label = QLabel("Двойной клик — открыть редактор")
+        self.hint_label = QLabel("Двойной клик: открыть редактор")
         self.hint_label.setObjectName("hint_label")
         self.hint_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hint_label)

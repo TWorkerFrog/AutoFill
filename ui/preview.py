@@ -35,8 +35,8 @@ class PreviewDialog(QDialog):
         self._scale_factor = 1.0
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(16, 18, 16, 16)
+        root.setSpacing(14)
 
         header = QHBoxLayout()
         header.setSpacing(10)
@@ -81,7 +81,7 @@ class PreviewDialog(QDialog):
         canvas = QFrame()
         canvas.setObjectName("preview_canvas")
         canvas_layout = QVBoxLayout(canvas)
-        canvas_layout.setContentsMargins(8, 8, 8, 8)
+        canvas_layout.setContentsMargins(8, 10, 8, 10)
         canvas_layout.setSpacing(0)
 
         self.scene = QGraphicsScene(self)
@@ -121,8 +121,8 @@ class PreviewDialog(QDialog):
         footer = QFrame()
         footer.setObjectName("dialog_footer")
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(0, 10, 0, 0)
-        footer_layout.setSpacing(8)
+        footer_layout.setContentsMargins(0, 14, 0, 0)
+        footer_layout.setSpacing(10)
 
         self.edit_btn = QPushButton("Редактировать позицию")
         self.edit_btn.setObjectName("secondary_btn")

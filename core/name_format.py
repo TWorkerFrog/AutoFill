@@ -8,7 +8,7 @@ from core.text_render import text_width
 def format_name_lines(parts: Sequence[str], mode: str, split_after: int = 1) -> list[str] | None:
     """Разбивает ФИО на строки согласно выбранному режиму.
 
-    ``None`` возвращается только для режима ``auto`` — решение о переносе
+    ``None`` возвращается только для режима ``auto`` - решение о переносе
     принимает :func:`resolve_auto_lines` с учётом реальной ширины шрифта.
     """
 

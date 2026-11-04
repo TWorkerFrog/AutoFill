@@ -141,8 +141,8 @@ class DiplomaGenerator(QMainWindow):
         central.setObjectName("central")
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(20, 16, 20, 16)
-        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(20, 20, 20, 18)
+        main_layout.setSpacing(18)
 
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.main_splitter.setObjectName("main_splitter")
@@ -189,8 +189,8 @@ class DiplomaGenerator(QMainWindow):
         bottom = QFrame()
         bottom.setObjectName("action_bar")
         bottom_layout = QHBoxLayout(bottom)
-        bottom_layout.setContentsMargins(14, 8, 14, 8)
-        bottom_layout.setSpacing(10)
+        bottom_layout.setContentsMargins(14, 10, 14, 10)
+        bottom_layout.setSpacing(12)
 
         self.status_label = QLabel("Готов к работе")
         self.status_label.setObjectName("status_label")
@@ -261,14 +261,14 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_main(self) -> None:
         layout = QVBoxLayout(self.tab_main)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 16, 0, 16)
+        layout.setSpacing(14)
 
         source_group = QGroupBox("Шаблон и шрифт")
         grid = QGridLayout(source_group)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(10)
+        grid.setVerticalSpacing(14)
         grid.setColumnStretch(1, 1)
 
         self.template_edit = QLineEdit()
@@ -346,7 +346,6 @@ class DiplomaGenerator(QMainWindow):
         self.letter_spacing_spin = QSpinBox()
         self.letter_spacing_spin.setRange(-20, 200)
         self.letter_spacing_spin.setValue(0)
-        self.letter_spacing_spin.setSuffix(" px")
         self.letter_spacing_spin.setFixedWidth(96)
         style_layout.addWidget(self.letter_spacing_spin)
         style_layout.addStretch()
@@ -354,7 +353,7 @@ class DiplomaGenerator(QMainWindow):
         layout.addWidget(source_group)
 
         self.names_editor = NameListEditor(
-            "Список ФИО (каждая строка — один человек)",
+            "Список ФИО (каждая строка: один человек)",
             "Иванов Иван Иванович\nПетров Пётр Петрович\n…",
             show_load=True,
         )
@@ -389,11 +388,12 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_position(self) -> None:
         layout = QVBoxLayout(self.tab_position)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 16, 0, 16)
+        layout.setSpacing(14)
 
         align_group = QGroupBox("Привязка блока")
         align_layout = QVBoxLayout(align_group)
+        align_layout.setSpacing(12)
         align_row = QHBoxLayout()
         align_row.addWidget(QLabel("Выравнивание строк:"))
         self.align_group = QButtonGroup(self)
@@ -411,7 +411,6 @@ class DiplomaGenerator(QMainWindow):
         x_row.addWidget(QLabel("X:"))
         self.x_edit = QSpinBox()
         self.x_edit.setRange(0, 100000)
-        self.x_edit.setSuffix(" px")
         x_row.addWidget(self.x_edit)
         self.x_auto_check = QCheckBox("Автоцентр по X")
         self.x_auto_check.setChecked(True)
@@ -422,7 +421,6 @@ class DiplomaGenerator(QMainWindow):
         x_row.addWidget(QLabel("Y:"))
         self.y_edit = QSpinBox()
         self.y_edit.setRange(0, 100000)
-        self.y_edit.setSuffix(" px")
         x_row.addWidget(self.y_edit)
         self.y_auto_check = QCheckBox("Автоцентр по Y")
         self.y_auto_check.setChecked(True)
@@ -435,6 +433,7 @@ class DiplomaGenerator(QMainWindow):
         offset_group = QGroupBox("Смещение и интервалы")
         offset_form = QFormLayout(offset_group)
         offset_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        offset_form.setVerticalSpacing(12)
 
         offset_row = QWidget()
         offset_layout = QHBoxLayout(offset_row)
@@ -442,13 +441,11 @@ class DiplomaGenerator(QMainWindow):
         offset_layout.addWidget(QLabel("X:"))
         self.x_offset_spin = QSpinBox()
         self.x_offset_spin.setRange(-100000, 100000)
-        self.x_offset_spin.setSuffix(" px")
         offset_layout.addWidget(self.x_offset_spin)
         offset_layout.addSpacing(18)
         offset_layout.addWidget(QLabel("Y:"))
         self.y_offset_spin = QSpinBox()
         self.y_offset_spin.setRange(-100000, 100000)
-        self.y_offset_spin.setSuffix(" px")
         offset_layout.addWidget(self.y_offset_spin)
         offset_layout.addStretch()
         offset_form.addRow("Сдвиг блока:", offset_row)
@@ -456,7 +453,6 @@ class DiplomaGenerator(QMainWindow):
         self.line_spacing_spin = QSpinBox()
         self.line_spacing_spin.setRange(0, 500)
         self.line_spacing_spin.setValue(4)
-        self.line_spacing_spin.setSuffix(" px")
         offset_form.addRow("Межстрочный интервал:", self.line_spacing_spin)
         layout.addWidget(offset_group)
 
@@ -475,11 +471,12 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_format(self) -> None:
         layout = QVBoxLayout(self.tab_format)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 16, 0, 16)
+        layout.setSpacing(14)
 
         mode_group = QGroupBox("Режим формирования ФИО")
         mode_layout = QVBoxLayout(mode_group)
+        mode_layout.setSpacing(10)
         self.name_mode_group = QButtonGroup(self)
         modes = [
             ("В одну строку", "single_line"),
@@ -499,6 +496,7 @@ class DiplomaGenerator(QMainWindow):
 
         params_group = QGroupBox("Параметры переноса")
         params_form = QFormLayout(params_group)
+        params_form.setVerticalSpacing(12)
         self.split_after_spin = QSpinBox()
         self.split_after_spin.setRange(1, 30)
         self.split_after_spin.setValue(1)
@@ -506,7 +504,6 @@ class DiplomaGenerator(QMainWindow):
         self.margin_spin = QSpinBox()
         self.margin_spin.setRange(0, 100000)
         self.margin_spin.setValue(36)
-        self.margin_spin.setSuffix(" px")
         params_form.addRow("Поля для печати:", self.margin_spin)
         layout.addWidget(params_group)
 
@@ -522,13 +519,14 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_output(self) -> None:
         layout = QVBoxLayout(self.tab_output)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 16, 0, 16)
+        layout.setSpacing(14)
 
         format_group = QGroupBox("Формат")
         format_layout = QVBoxLayout(format_group)
+        format_layout.setSpacing(10)
         self.format_group = QButtonGroup(self)
-        self.rb_png = QRadioButton("PNG — отдельный файл для каждого ФИО")
+        self.rb_png = QRadioButton("PNG: отдельный файл для каждого ФИО")
         self.rb_pdf = QRadioButton("PDF")
         self.rb_pdf.setChecked(True)
         self.format_group.addButton(self.rb_png)
@@ -558,6 +556,7 @@ class DiplomaGenerator(QMainWindow):
 
         output_group = QGroupBox("Сохранение")
         output_layout = QVBoxLayout(output_group)
+        output_layout.setSpacing(10)
         dir_row = QHBoxLayout()
         dir_row.addWidget(QLabel("Папка:"))
         self.output_dir_edit = QLineEdit(self._default_output_dir())
@@ -584,6 +583,7 @@ class DiplomaGenerator(QMainWindow):
 
         preview_group = QGroupBox("Текст в редакторе")
         preview_layout = QVBoxLayout(preview_group)
+        preview_layout.setSpacing(10)
         self.preview_group = QButtonGroup(self)
         self.rb_preview_test = QRadioButton("Тестовое имя (Иванов Иван Иванович)")
         self.rb_preview_longest = QRadioButton("Самое длинное из списка")
@@ -605,11 +605,12 @@ class DiplomaGenerator(QMainWindow):
 
     def build_tab_settings(self) -> None:
         layout = QVBoxLayout(self.tab_settings)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 16, 0, 16)
+        layout.setSpacing(14)
 
         theme_group = QGroupBox("Тема оформления")
         theme_layout = QVBoxLayout(theme_group)
+        theme_layout.setSpacing(10)
         self.theme_group = QButtonGroup(self)
         self.rb_dark = QRadioButton("Тёмная")
         self.rb_light = QRadioButton("Светлая")
@@ -622,6 +623,7 @@ class DiplomaGenerator(QMainWindow):
 
         about_group = QGroupBox("О программе")
         about_layout = QVBoxLayout(about_group)
+        about_layout.setSpacing(10)
         about_layout.addWidget(QLabel(f"AutoFill {__version__}"))
         about_layout.addWidget(QLabel("Авторы: Alexey «TWorker» Zhaliy, Maxim «jojer» Odincov"))
         about_layout.addWidget(QLabel("Polyform Noncommercial License 1.0.0"))
@@ -640,6 +642,7 @@ class DiplomaGenerator(QMainWindow):
 
         path_group = QGroupBox("Файлы настроек")
         path_layout = QVBoxLayout(path_group)
+        path_layout.setSpacing(10)
         path_label = QLabel(str(self.settings_store.path))
         path_label.setWordWrap(True)
         path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -1013,6 +1016,36 @@ class DiplomaGenerator(QMainWindow):
             self.selected_font_style = style
         self._schedule_preview()
 
+    def apply_font_path(self, path: str) -> None:
+        path = str(path or "").strip()
+        if not path or not Path(path).is_file():
+            return
+        target = Path(path).resolve()
+        for family, styles in self.fonts_data.items():
+            for style, candidate in styles.items():
+                try:
+                    matches = Path(candidate).resolve() == target
+                except OSError:
+                    matches = str(candidate) == path
+                if matches:
+                    self.font_edit.blockSignals(True)
+                    self.font_edit.setText(family)
+                    self.font_edit.blockSignals(False)
+                    self.apply_font_family(family, preferred_style=style)
+                    return
+
+        self.font_path = path
+        self.selected_font_family = ""
+        self.selected_font_style = "Regular"
+        self.font_edit.blockSignals(True)
+        self._set_path_text(self.font_edit, path)
+        self.font_edit.blockSignals(False)
+        self.style_combo.blockSignals(True)
+        self.style_combo.clear()
+        self.style_combo.blockSignals(False)
+        self.style_combo.setVisible(False)
+        self._schedule_preview()
+
     def apply_font_family(self, family: str, preferred_style: str | None = None) -> None:
         styles = self.fonts_data.get(family, {})
         if not styles:
@@ -1354,6 +1387,7 @@ class DiplomaGenerator(QMainWindow):
                 auto_y=self.y_auto_check.isChecked(),
                 safe_area_color=self.safe_area_color,
                 marker_color=self.marker_color,
+                fonts_data=self.fonts_data,
             )
         except Exception as exc:
             self._error(f"Не удалось открыть шаблон: {exc}")
@@ -1388,6 +1422,10 @@ class DiplomaGenerator(QMainWindow):
         self.y_edit.setValue(max(0, y))
 
         has_style = getattr(dialog, "render_config", None) is not None
+        if has_style and hasattr(dialog, "get_font_path"):
+            font_path = dialog.get_font_path()
+            if font_path:
+                self.apply_font_path(font_path)
         if has_style and hasattr(dialog, "get_font_size"):
             self.font_size_spin.setValue(dialog.get_font_size())
         if has_style and hasattr(dialog, "get_text_color"):
@@ -1639,7 +1677,7 @@ class DiplomaGenerator(QMainWindow):
                     f"{text or 'блок'}: +{overflow}px ({side})"
                     for text, overflow, side in problems
                 )
-                message += f"• {' '.join(parts)} — {details}\n"
+                message += f"• {' '.join(parts)}: {details}\n"
             if len(problematic) > 12:
                 message += f"\n…и ещё {len(problematic) - 12}"
             answer = self._message(
@@ -1798,7 +1836,7 @@ class DiplomaGenerator(QMainWindow):
         self.progress_bar.setRange(0, max(1, total))
         self.progress_bar.setValue(min(done, total))
         if name:
-            self.status_label.setText(f"Генерация: {done}/{total} — {name}")
+            self.status_label.setText(f"Генерация: {done}/{total}, {name}")
         else:
             self.status_label.setText(f"Генерация: {done}/{total}")
 
@@ -1827,7 +1865,7 @@ class DiplomaGenerator(QMainWindow):
         output_dir = getattr(result, "output_dir", self.output_dir_edit.text())
         self.open_dir_btn.setVisible(True)
         word = plural(result.created, ("грамота", "грамоты", "грамот"))
-        self.status_label.setText(f"Готово: {result.created} {word} — {output_dir}")
+        self.status_label.setText(f"Готово: {result.created} {word} ({output_dir})")
 
         lines = [
             f"Создано: {result.created} {plural(result.created, ('грамота', 'грамоты', 'грамот'))}",
@@ -1905,43 +1943,49 @@ class DiplomaGenerator(QMainWindow):
     # Справка
     # ------------------------------------------------------------------
     def show_help(self) -> None:
-        text = """КАК РАБОТАТЬ С ПРОГРАММОЙ
+        text = """КАК РАБОТАТЬ
 
 1. Выберите шаблон грамоты (JPG или PNG).
-2. Выберите шрифт из списка или укажите TTF/OTF/TTC-файл.
-3. Задайте размер, цвет и межбуквенный интервал.
-4. Вставьте список ФИО — каждая строка один человек.
-5. Настройте позицию во вкладке «Позиция» или укажите точку на шаблоне.
+2. Выберите шрифт из списка или укажите файл TTF, OTF или TTC.
+3. Настройте размер, цвет и интервал текста.
+4. Вставьте список ФИО: каждая строка соответствует одному человеку.
+5. Откройте вкладку «Позиция» и настройте место текста. Можно открыть
+   редактор и указать точку прямо на шаблоне.
 6. Нажмите «Сгенерировать».
 
 РЕДАКТОР
 
-Справа всегда показывается живой предпросмотр. Двойной клик по нему или F5
-открывает редактор: там можно сразу изменить размер и цвет текста, положение,
-выравнивание и поля для печати. Перед генерацией редактор можно открывать
-автоматически.
+Справа показан живой предпросмотр. Двойной клик по нему или клавиша F5
+открывает редактор. В редакторе можно изменить шрифт, размер, цвет,
+положение, выравнивание и поля для печати. Перед генерацией редактор
+можно открывать автоматически.
 
-ПОИСК В СПИСКЕ
+ПОИСК
 
-Поиск показывает только совпавшие строки. Пока поиск активен, список доступен
-только для чтения — это защищает скрытые строки от потери. Очистите поиск,
-чтобы редактировать.
+Поиск показывает только подходящие строки. Пока поиск включён, список
+нельзя редактировать, чтобы не потерять скрытые строки. Очистите поиск,
+чтобы вернуться к редактированию.
 
 ИСКЛЮЧЕНИЯ
 
-ФИО, не влезшие в поля для печати, можно перенести обратно в основной список.
-Перенос не стирает основной список без явного выбора.
+Сюда попадают ФИО, которые не помещаются в поля для печати. Их можно
+вернуть в основной список. Перед переносом приложение спросит подтверждение.
 
-БЕЗОПАСНОСТЬ ФАЙЛОВ
+ФАЙЛЫ
 
-AutoFill никогда не очищает всю папку. Удаляются только файлы, перечисленные
-в манифесте предыдущих запусков. Существующие файлы можно заменить, пронумеровать
-или пропустить — решение принимается один раз для всей пачки.
+AutoFill не удаляет всю папку. Он убирает только свои старые файлы,
+которые создал сам. Если файл с таким именем уже есть, выберите: заменить,
+добавить номер или пропустить. Решение применяется ко всей пачке.
 
-Горячие клавиши: Ctrl+O — шаблон, Ctrl+Shift+O — список, Ctrl+G — генерация,
-F5 — редактор, Esc — отмена генерации.
+ГОРЯЧИЕ КЛАВИШИ
 
-Настройки сохраняются при выходе (или кнопкой в разделе «Настройки»)."""
+Ctrl+O: шаблон
+Ctrl+Shift+O: список
+Ctrl+G: генерация
+F5: редактор
+Esc: отмена генерации
+
+Настройки сохраняются при выходе или кнопкой в разделе «Настройки»."""
         self._message("Инструкция", text, [("Понятно", "primary")])
 
     def show_license(self) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path
 
 from PIL import Image, ImageFont
 from PySide6.QtCore import Qt, QTimer
@@ -12,7 +13,9 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QColorDialog,
+    QComboBox,
     QDialog,
+    QFileDialog,
     QFrame,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
@@ -22,11 +25,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from core.font_utils import scan_fonts
 from core.generator import RenderConfig, render_page
 from core.screen_utils import get_window_size
 from ui.overlays import add_safe_area, set_safe_area_visible
@@ -55,6 +60,7 @@ class PointPickerDialog(QDialog):
         auto_y: bool = False,
         safe_area_color: tuple[int, int, int] | None = None,
         marker_color: tuple[int, int, int] | None = None,
+        fonts_data: dict[str, dict[str, str]] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Редактор грамоты")
@@ -68,6 +74,13 @@ class PointPickerDialog(QDialog):
         self.marker_color = tuple(marker_color or (139, 92, 246))
         self.render_config = render_config
         self.preview_parts = list(preview_parts or [])
+        self.fonts_data = fonts_data if fonts_data is not None else scan_fonts()
+        self.font_path = (
+            str(render_config.font_path)
+            if render_config is not None and render_config.font_path
+            else ""
+        )
+        self._loading_font = True
         if safe_margin is None and render_config is not None:
             safe_margin = render_config.margin
         self.safe_margin = max(0, int(safe_margin or 0))
@@ -194,8 +207,8 @@ class PointPickerDialog(QDialog):
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 16)
-        root.setSpacing(14)
+        root.setContentsMargins(20, 20, 20, 18)
+        root.setSpacing(18)
 
         header = QHBoxLayout()
         header.setSpacing(10)
@@ -211,11 +224,11 @@ class PointPickerDialog(QDialog):
         self.help_btn.setObjectName("help_btn")
         self.help_btn.setFixedSize(26, 26)
         self.help_btn.setToolTip(
-            "Правый клик — поставить точку.\n"
-            "Левая кнопка — перемещать изображение.\n"
-            "Колесо — зум; стрелки — сдвиг; Shift — 10 px; Ctrl — 50 px.\n"
-            "Alt + движение мыши — расстояние до точки.\n"
-            "Поля для печати — отступ, за который не должен выходить текст."
+            "Правый клик: поставить точку.\n"
+            "Левая кнопка: перемещать изображение.\n"
+            "Колесо: зум. Стрелки: сдвиг. Shift: 10 px. Ctrl: 50 px.\n"
+            "Alt + движение мыши: расстояние до точки.\n"
+            "Поля для печати: отступ, за который не должен выходить текст."
         )
         header.addWidget(self.help_btn)
         root.addLayout(header)
@@ -226,8 +239,8 @@ class PointPickerDialog(QDialog):
         canvas = QFrame()
         canvas.setObjectName("editor_canvas")
         canvas_layout = QVBoxLayout(canvas)
-        canvas_layout.setContentsMargins(12, 12, 12, 12)
-        canvas_layout.setSpacing(10)
+        canvas_layout.setContentsMargins(12, 14, 12, 14)
+        canvas_layout.setSpacing(14)
         canvas_layout.addWidget(self.view, 1)
         canvas_layout.addLayout(self._build_zoom_bar())
         canvas_layout.addWidget(self.info_label)
@@ -237,32 +250,47 @@ class PointPickerDialog(QDialog):
         inspector.setObjectName("inspector")
         inspector.setFixedWidth(286)
         inspector_layout = QVBoxLayout(inspector)
-        inspector_layout.setContentsMargins(16, 16, 16, 16)
-        inspector_layout.setSpacing(10)
+        inspector_layout.setContentsMargins(0, 0, 0, 0)
+        inspector_layout.setSpacing(0)
 
-        inspector_layout.addWidget(self._heading("Текст"))
-        inspector_layout.addLayout(
+        inspector_scroll = QScrollArea(inspector)
+        inspector_scroll.setObjectName("inspector_scroll")
+        inspector_scroll.setWidgetResizable(True)
+        inspector_scroll.setFrameShape(QFrame.NoFrame)
+        inspector_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        inspector_content = QWidget()
+        inspector_content.setObjectName("inspector_content")
+        content_layout = QVBoxLayout(inspector_content)
+        content_layout.setContentsMargins(16, 16, 16, 16)
+        content_layout.setSpacing(14)
+
+        content_layout.addWidget(self._heading("Текст"))
+        content_layout.addLayout(
+            self._field_row("Шрифт", self._build_font_combo())
+        )
+        content_layout.addLayout(
             self._field_row("Размер", self._build_font_size_spin())
         )
-        inspector_layout.addLayout(
+        content_layout.addLayout(
             self._field_row("Цвет", self._build_color_row())
         )
-        inspector_layout.addLayout(
+        content_layout.addLayout(
             self._field_row("Интервал", self._build_letter_spacing_spin())
         )
 
-        inspector_layout.addSpacing(6)
-        inspector_layout.addWidget(self._heading("Положение"))
-        inspector_layout.addWidget(self._build_align_segments())
-        inspector_layout.addWidget(self._build_auto_row())
-        inspector_layout.addLayout(
+        content_layout.addSpacing(10)
+        content_layout.addWidget(self._heading("Положение"))
+        content_layout.addWidget(self._build_align_segments())
+        content_layout.addWidget(self._build_auto_row())
+        content_layout.addLayout(
             self._field_row("Крестик", self._build_marker_color_row())
         )
 
-        inspector_layout.addSpacing(6)
-        inspector_layout.addWidget(self._heading("Печать"))
-        inspector_layout.addLayout(self._build_margin_row())
-        inspector_layout.addLayout(
+        content_layout.addSpacing(10)
+        content_layout.addWidget(self._heading("Печать"))
+        content_layout.addLayout(self._build_margin_row())
+        content_layout.addLayout(
             self._field_row("Линия", self._build_safe_color_row())
         )
         self.safe_check = QCheckBox("Показывать поля для печати")
@@ -272,9 +300,11 @@ class PointPickerDialog(QDialog):
             "Показывает границу полей для печати. Текст не должен выходить за неё."
         )
         self.safe_check.toggled.connect(self._on_safe_area_toggled)
-        inspector_layout.addWidget(self.safe_check)
+        content_layout.addWidget(self.safe_check)
 
-        inspector_layout.addStretch()
+        content_layout.addStretch()
+        inspector_scroll.setWidget(inspector_content)
+        inspector_layout.addWidget(inspector_scroll)
         body.addWidget(inspector)
 
         root.addLayout(body, 1)
@@ -282,8 +312,8 @@ class PointPickerDialog(QDialog):
         footer = QFrame()
         footer.setObjectName("dialog_footer")
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(0, 12, 0, 0)
-        footer_layout.setSpacing(8)
+        footer_layout.setContentsMargins(0, 16, 0, 0)
+        footer_layout.setSpacing(10)
 
         self.reset_btn = QPushButton("Сбросить оформление")
         self.reset_btn.setObjectName("link_btn")
@@ -321,10 +351,141 @@ class PointPickerDialog(QDialog):
         row.setSpacing(10)
         label = QLabel(label_text)
         label.setObjectName("field_label")
-        label.setMinimumWidth(70)
+        label.setMinimumWidth(64)
         row.addWidget(label)
         row.addWidget(widget, 1)
         return row
+
+    @staticmethod
+    def _same_path(first: str, second: str) -> bool:
+        try:
+            return Path(first).resolve() == Path(second).resolve()
+        except OSError:
+            return str(first) == str(second)
+
+    def _populate_font_combo(self) -> None:
+        self.font_combo.blockSignals(True)
+        self.font_combo.clear()
+
+        style_order = [
+            "Thin", "ExtraLight", "Light", "Regular", "Book", "Medium",
+            "SemiBold", "Bold", "ExtraBold", "Black",
+            "Thin Italic", "ExtraLight Italic", "Light Italic", "Italic",
+            "Medium Italic", "SemiBold Italic", "Bold Italic",
+            "ExtraBold Italic", "Black Italic",
+        ]
+        current_index = -1
+        found_current = False
+
+        if self.font_path and Path(self.font_path).is_file():
+            for family in sorted(self.fonts_data, key=str.casefold):
+                styles = self.fonts_data[family]
+                sorted_styles = sorted(
+                    styles,
+                    key=lambda value: (
+                        style_order.index(value) if value in style_order else len(style_order),
+                        value.casefold(),
+                    ),
+                )
+                for style in sorted_styles:
+                    path = styles[style]
+                    label = family if style == "Regular" else f"{family} ({style})"
+                    self.font_combo.addItem(label, path)
+                    if self._same_path(path, self.font_path):
+                        current_index = self.font_combo.count() - 1
+                        found_current = True
+
+            if not found_current:
+                self.font_combo.insertItem(
+                    0,
+                    f"Файл: {Path(self.font_path).name}",
+                    self.font_path,
+                )
+                current_index = 0
+        else:
+            for family in sorted(self.fonts_data, key=str.casefold):
+                styles = self.fonts_data[family]
+                sorted_styles = sorted(
+                    styles,
+                    key=lambda value: (
+                        style_order.index(value) if value in style_order else len(style_order),
+                        value.casefold(),
+                    ),
+                )
+                for style in sorted_styles:
+                    path = styles[style]
+                    label = family if style == "Regular" else f"{family} ({style})"
+                    self.font_combo.addItem(label, path)
+
+        if current_index < 0 and self.font_combo.count():
+            current_index = 0
+        self.font_combo.setCurrentIndex(current_index)
+        self.font_combo.blockSignals(False)
+
+    def _build_font_combo(self) -> QWidget:
+        wrapper = QWidget()
+        layout = QHBoxLayout(wrapper)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.font_combo = QComboBox()
+        self.font_combo.setMaxVisibleItems(20)
+        self.font_combo.setSizeAdjustPolicy(
+            QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.font_combo.setMinimumContentsLength(8)
+        self.font_combo.setMinimumWidth(0)
+        self.font_combo.setMaximumWidth(128)
+        self.font_combo.setEnabled(self.render_config is not None)
+        self._populate_font_combo()
+        self.font_combo.currentIndexChanged.connect(self._on_font_changed)
+        layout.addWidget(self.font_combo, 1)
+
+        self.font_file_btn = QPushButton("Файл")
+        self.font_file_btn.setObjectName("link_btn")
+        self.font_file_btn.setFixedWidth(40)
+        self.font_file_btn.setToolTip("Выбрать файл шрифта")
+        self.font_file_btn.setEnabled(self.render_config is not None)
+        self.font_file_btn.clicked.connect(self.choose_font_file)
+        layout.addWidget(self.font_file_btn)
+        self.font_combo.setToolTip(self.font_combo.currentText())
+
+        self._loading_font = False
+        return wrapper
+
+    def _on_font_changed(self, index: int) -> None:
+        if self._loading_font or index < 0:
+            return
+        path = self.font_combo.itemData(index)
+        if not path:
+            return
+        self.font_path = str(path)
+        self.font_combo.setToolTip(self.font_combo.currentText())
+        self._refresh_render_config()
+
+    def choose_font_file(self) -> None:
+        if self.render_config is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выберите файл шрифта",
+            self.font_path or str(Path.home()),
+            "Шрифты (*.ttf *.otf *.ttc)",
+            options=QFileDialog.DontUseNativeDialog,
+        )
+        if not path:
+            return
+
+        self.font_path = path
+        self._loading_font = True
+        for index in reversed(range(self.font_combo.count())):
+            if self.font_combo.itemText(index).startswith("Файл:"):
+                self.font_combo.removeItem(index)
+        self.font_combo.insertItem(0, f"Файл: {Path(path).name}", path)
+        self.font_combo.setCurrentIndex(0)
+        self._loading_font = False
+        self.font_combo.setToolTip(self.font_combo.currentText())
+        self._refresh_render_config()
 
     def _build_font_size_spin(self) -> QSpinBox:
         self.font_size_spin = QSpinBox()
@@ -339,7 +500,6 @@ class PointPickerDialog(QDialog):
     def _build_letter_spacing_spin(self) -> QSpinBox:
         self.letter_spacing_spin = QSpinBox()
         self.letter_spacing_spin.setRange(-20, 200)
-        self.letter_spacing_spin.setSuffix(" px")
         self.letter_spacing_spin.setValue(self.letter_spacing)
         self.letter_spacing_spin.setEnabled(self.render_config is not None)
         self.letter_spacing_spin.valueChanged.connect(self._on_letter_spacing_changed)
@@ -512,10 +672,10 @@ class PointPickerDialog(QDialog):
         row.addWidget(label)
         self.margin_spin = QSpinBox()
         self.margin_spin.setRange(0, 100000)
-        self.margin_spin.setSuffix(" px")
         self.margin_spin.setValue(self.safe_margin)
         self.margin_spin.setToolTip(
-            "Отступ от краёв, за который не должен выходить текст при печати. 0 — без ограничения."
+            "Отступ от краёв, за который не должен выходить текст при печати. "
+            "0 означает отсутствие ограничения."
         )
         self.margin_spin.valueChanged.connect(self._on_margin_changed)
         row.addWidget(self.margin_spin, 1)
@@ -545,8 +705,10 @@ class PointPickerDialog(QDialog):
     def _refresh_render_config(self) -> None:
         if self.render_config is None:
             return
+        font_path = self.font_path or self.render_config.font_path
         self.render_config = replace(
             self.render_config,
+            font_path=font_path,
             font_size=self.font_size_spin.value(),
             text_color=tuple(self.text_color),
             letter_spacing=self.letter_spacing_spin.value(),
@@ -665,6 +827,9 @@ class PointPickerDialog(QDialog):
     def get_text_color(self) -> tuple[int, int, int]:
         return tuple(self.text_color)
 
+    def get_font_path(self) -> str:
+        return self.font_path
+
     def get_font_size(self) -> int:
         return self.font_size_spin.value()
 
@@ -684,10 +849,10 @@ class PointPickerDialog(QDialog):
 
     def _align_hint(self) -> str:
         if self.align == "left":
-            return "Правый клик — поставить точку (левый край блока)"
+            return "Правый клик: поставить точку (левый край блока)"
         if self.align == "right":
-            return "Правый клик — поставить точку (правый край блока)"
-        return "Правый клик — поставить точку (центр блока)"
+            return "Правый клик: поставить точку (правый край блока)"
+        return "Правый клик: поставить точку (центр блока)"
 
     def on_align_changed(self, align: str | None = None) -> None:
         if align is None:

@@ -44,8 +44,8 @@ class MessageDialog(QDialog):
         self.buttons: list[QPushButton] = []
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 20, 20, 18)
+        layout.setSpacing(18)
 
         self.text_browser = QTextBrowser(self)
         self.text_browser.setObjectName("message_text")

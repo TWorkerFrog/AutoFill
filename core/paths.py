@@ -243,7 +243,7 @@ def cleanup_manifest(
             errors.append(f"Пропущен путь вне папки: {item}")
             continue
         if excluded_key is not None and os.path.normcase(str(candidate)) == excluded_key:
-            # Шаблон — входной файл, а не результат очистки.  Убираем его из
+            # Шаблон - входной файл, а не результат очистки.  Убираем его из
             # манифеста, чтобы будущие запуски тоже его не трогали.
             continue
         if not candidate.is_file():

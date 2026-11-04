@@ -40,7 +40,7 @@ def _name_record_value(font: TTFont, name_id: int) -> str | None:
         return None
 
     def score(record) -> tuple[int, int]:
-        # Английский (US) и Windows/Unicode — в приоритете, затем любые.
+        # Английский (US) и Windows/Unicode - в приоритете, затем любые.
         return (
             0 if record.platformID == 3 and record.langID == 0x409 else 1,
             0 if record.platformID == 3 else 1,
@@ -71,7 +71,7 @@ def get_font_metadata(path: str | os.PathLike[str]) -> tuple[str | None, str | N
         else:
             font = TTFont(path, lazy=True, fontNumber=0)
 
-        # 16/17 — типографические family/subfamily; 1/2 — legacy.
+        # 16/17 - типографические family/subfamily; 1/2 - legacy.
         family = _name_record_value(font, 16) or _name_record_value(font, 1)
         style = _name_record_value(font, 17) or _name_record_value(font, 2) or "Regular"
         return family, style
