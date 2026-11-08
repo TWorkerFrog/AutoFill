@@ -11,11 +11,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QCompleter,
     QDialog,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -55,12 +53,20 @@ from core.screen_utils import get_window_size
 from core.settings import AppSettings, SettingsStore
 from core.text_render import check_text_bounds
 from core.version import __version__
-from core.windows_utils import is_windows_theme, set_title_bar_color, set_title_bar_light_theme
+from core.windows_utils import is_windows_theme
 from ui.collapsible import CollapsibleSection
 from ui.message_dialog import MessageDialog
 from ui.name_list import NameListEditor
 from ui.point_picker import PointPickerDialog
 from ui.preview_pane import PreviewPane
+from ui.themed_dialogs import (
+    apply_theme_tree,
+    apply_title_bar,
+    get_color,
+    get_existing_directory,
+    get_open_file_name,
+    style_popup,
+)
 from ui.worker import GenerationWorker
 
 log = logging.getLogger(__name__)
@@ -411,6 +417,7 @@ class DiplomaGenerator(QMainWindow):
         x_row.addWidget(QLabel("X:"))
         self.x_edit = QSpinBox()
         self.x_edit.setRange(0, 100000)
+        self.x_edit.setFixedWidth(96)
         x_row.addWidget(self.x_edit)
         self.x_auto_check = QCheckBox("Автоцентр по X")
         self.x_auto_check.setChecked(True)
@@ -421,6 +428,7 @@ class DiplomaGenerator(QMainWindow):
         x_row.addWidget(QLabel("Y:"))
         self.y_edit = QSpinBox()
         self.y_edit.setRange(0, 100000)
+        self.y_edit.setFixedWidth(96)
         x_row.addWidget(self.y_edit)
         self.y_auto_check = QCheckBox("Автоцентр по Y")
         self.y_auto_check.setChecked(True)
@@ -431,29 +439,39 @@ class DiplomaGenerator(QMainWindow):
         layout.addWidget(align_group)
 
         offset_group = QGroupBox("Смещение и интервалы")
-        offset_form = QFormLayout(offset_group)
-        offset_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        offset_form.setVerticalSpacing(12)
+        # Общая сетка вместо QFormLayout: колонка меток одна на все строки,
+        # поэтому спины X и интервала выстроены вертикально.
+        offset_grid = QGridLayout(offset_group)
+        offset_grid.setContentsMargins(0, 0, 0, 0)
+        offset_grid.setHorizontalSpacing(10)
+        offset_grid.setVerticalSpacing(12)
 
-        offset_row = QWidget()
-        offset_layout = QHBoxLayout(offset_row)
-        offset_layout.setContentsMargins(0, 0, 0, 0)
-        offset_layout.addWidget(QLabel("X:"))
+        offset_label = QLabel("Сдвиг блока:")
+        interval_label = QLabel("Межстрочный интервал:")
+        label_width = max(offset_label.sizeHint().width(), interval_label.sizeHint().width())
+        offset_grid.setColumnMinimumWidth(0, label_width)
+        offset_grid.addWidget(offset_label, 0, 0)
+
+        offset_grid.addWidget(QLabel("X:"), 0, 1)
         self.x_offset_spin = QSpinBox()
         self.x_offset_spin.setRange(-100000, 100000)
-        offset_layout.addWidget(self.x_offset_spin)
-        offset_layout.addSpacing(18)
-        offset_layout.addWidget(QLabel("Y:"))
+        self.x_offset_spin.setFixedWidth(96)
+        offset_grid.addWidget(self.x_offset_spin, 0, 2)
+        offset_grid.setColumnMinimumWidth(3, 18)
+        offset_grid.addWidget(QLabel("Y:"), 0, 4)
         self.y_offset_spin = QSpinBox()
         self.y_offset_spin.setRange(-100000, 100000)
-        offset_layout.addWidget(self.y_offset_spin)
-        offset_layout.addStretch()
-        offset_form.addRow("Сдвиг блока:", offset_row)
+        self.y_offset_spin.setFixedWidth(96)
+        offset_grid.addWidget(self.y_offset_spin, 0, 5)
+        offset_grid.setColumnStretch(6, 1)
 
+        offset_grid.addWidget(interval_label, 1, 0)
         self.line_spacing_spin = QSpinBox()
         self.line_spacing_spin.setRange(0, 500)
         self.line_spacing_spin.setValue(4)
-        offset_form.addRow("Межстрочный интервал:", self.line_spacing_spin)
+        # Та же компактная ширина, что у поля «Размер» на вкладке «Основные».
+        self.line_spacing_spin.setFixedWidth(96)
+        offset_grid.addWidget(self.line_spacing_spin, 1, 2)
         layout.addWidget(offset_group)
 
         buttons = QHBoxLayout()
@@ -500,10 +518,12 @@ class DiplomaGenerator(QMainWindow):
         self.split_after_spin = QSpinBox()
         self.split_after_spin.setRange(1, 30)
         self.split_after_spin.setValue(1)
+        self.split_after_spin.setFixedWidth(96)
         params_form.addRow("Слов на первой строке:", self.split_after_spin)
         self.margin_spin = QSpinBox()
         self.margin_spin.setRange(0, 100000)
         self.margin_spin.setValue(36)
+        self.margin_spin.setFixedWidth(96)
         params_form.addRow("Поля для печати:", self.margin_spin)
         layout.addWidget(params_group)
 
@@ -568,11 +588,12 @@ class DiplomaGenerator(QMainWindow):
         output_layout.addLayout(dir_row)
 
         self.cleanup_previous_check = QCheckBox(
-            "Удалить ранее созданные AutoFill файлы (только по манифесту)"
+            "Удалить файлы, созданные AutoFill при прошлых генерациях"
         )
         self.cleanup_previous_check.setToolTip(
-            "Удаляются только файлы, которые AutoFill создал ранее и записал в манифест. "
-            "Чужие файлы и папки не затрагиваются."
+            "AutoFill запоминает созданные им файлы в манифесте "
+            ".autofill-manifest.json внутри папки вывода. Удаляются только они: "
+            "шаблон, ваши и чужие файлы, а также папки не затрагиваются."
         )
         output_layout.addWidget(self.cleanup_previous_check)
 
@@ -868,18 +889,11 @@ class DiplomaGenerator(QMainWindow):
     def _apply_theme(self, theme: str) -> None:
         theme = "light" if theme == "light" else "dark"
         self.current_theme = theme
-        self.setProperty("theme", theme)
-        for widget in self.findChildren(QWidget):
-            widget.setProperty("theme", theme)
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        # apply_theme_tree дополнительно красит попапы комбобоксов и
+        # автодополнения, которые findChildren не видит до первого показа.
+        apply_theme_tree(self, theme)
 
         self._apply_title_bar_theme(self, theme)
-
-        if hasattr(self, "completer"):
-            self.apply_theme_to_completer(self.completer)
 
     @staticmethod
     def _apply_title_bar_theme(window, theme: str) -> None:
@@ -889,34 +903,15 @@ class DiplomaGenerator(QMainWindow):
         нативного окна, поэтому обновляем их ещё раз через event loop.
         """
 
-        is_light = theme != "dark"
-        color = "#F5F6FA" if is_light else "#1E1E1E"
-
-        def apply() -> None:
-            set_title_bar_color(window, color)
-            set_title_bar_light_theme(window, is_light)
-
-        apply()
-        QTimer.singleShot(0, window, apply)
-        QTimer.singleShot(150, window, apply)
+        apply_title_bar(window, theme)
 
     def apply_theme_to_dialog(self, dialog, theme: str | None = None) -> None:
         theme = theme or self.current_theme
-        dialog.setProperty("theme", theme)
-        for widget in dialog.findChildren(QWidget):
-            widget.setProperty("theme", theme)
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
-        dialog.style().unpolish(dialog)
-        dialog.style().polish(dialog)
+        apply_theme_tree(dialog, theme)
         self._apply_title_bar_theme(dialog, theme)
 
-    def apply_theme_to_completer(self, completer: QCompleter) -> None:
-        popup = completer.popup()
-        if popup:
-            popup.setProperty("theme", self.current_theme)
-            popup.style().unpolish(popup)
-            popup.style().polish(popup)
+    def apply_theme_to_completer(self, completer) -> None:
+        style_popup(completer.popup(), self.current_theme)
 
     # ------------------------------------------------------------------
     # Источники и параметры
@@ -927,12 +922,12 @@ class DiplomaGenerator(QMainWindow):
         return str(base / "AutoFill")
 
     def choose_template(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        path = get_open_file_name(
             self,
+            self.current_theme,
             "Выберите шаблон грамоты",
             self.template_path or str(Path.home()),
             "Изображения (*.jpg *.jpeg *.png)",
-            options=QFileDialog.DontUseNativeDialog,
         )
         if path:
             self._set_path_text(self.template_edit, path)
@@ -943,12 +938,12 @@ class DiplomaGenerator(QMainWindow):
         self._schedule_preview()
 
     def choose_font_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        path = get_open_file_name(
             self,
+            self.current_theme,
             "Выберите файл шрифта",
             self.font_path or str(Path.home()),
             "Шрифты (*.ttf *.otf *.ttc)",
-            options=QFileDialog.DontUseNativeDialog,
         )
         if path:
             self.font_path = path
@@ -965,14 +960,9 @@ class DiplomaGenerator(QMainWindow):
         self.color_preview.setStyleSheet(f"background-color: {value};")
 
     def choose_color(self) -> None:
-        color = QColorDialog.getColor(
-            QColor(*self.text_color),
-            self,
-            "Цвет текста",
-            QColorDialog.DontUseNativeDialog,
-        )
-        if color.isValid():
-            self.text_color = (color.red(), color.green(), color.blue())
+        color = get_color(self, self.current_theme, "Цвет текста", self.text_color)
+        if color is not None:
+            self.text_color = color
             self._set_color_preview(self.text_color)
             self._schedule_preview()
 
@@ -1160,11 +1150,11 @@ class DiplomaGenerator(QMainWindow):
         self._schedule_preview()
 
     def choose_output_dir(self) -> None:
-        path = QFileDialog.getExistingDirectory(
+        path = get_existing_directory(
             self,
+            self.current_theme,
             "Выберите папку для сохранения",
             self.output_dir_edit.text() or self._default_output_dir(),
-            options=QFileDialog.DontUseNativeDialog,
         )
         if path:
             self._set_path_text(self.output_dir_edit, path)
@@ -1471,12 +1461,12 @@ class DiplomaGenerator(QMainWindow):
     # Списки
     # ------------------------------------------------------------------
     def load_names_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        path = get_open_file_name(
             self,
+            self.current_theme,
             "Выберите файл со списком",
             str(Path.home()),
             "Текст (*.txt *.csv);;Все файлы (*)",
-            options=QFileDialog.DontUseNativeDialog,
         )
         if not path:
             return
@@ -1714,7 +1704,7 @@ class DiplomaGenerator(QMainWindow):
                     [
                         ("Заменить", "primary"),
                         ("Создать с номером", ""),
-                        ("Пропустить", ""),
+                        ("Оставить существующий", ""),
                         ("Отмена", ""),
                     ],
                 )
@@ -1735,11 +1725,13 @@ class DiplomaGenerator(QMainWindow):
                 answer = self._message(
                     "Файлы уже существуют",
                     f"В папке уже есть {existing} файл(ов) с такими именами.\n"
-                    "Что сделать со всеми?",
+                    "Что сделать со всеми?\n\n"
+                    "«Оставить существующие»: старые файлы не пересоздаются, "
+                    "остальные ФИО будут сгенерированы.",
                     [
                         ("Заменить все", "primary"),
                         ("Создать с номерами", ""),
-                        ("Пропустить существующие", ""),
+                        ("Оставить существующие", ""),
                         ("Отмена", ""),
                     ],
                 )
@@ -1974,8 +1966,10 @@ class DiplomaGenerator(QMainWindow):
 ФАЙЛЫ
 
 AutoFill не удаляет всю папку. Он убирает только свои старые файлы,
-которые создал сам. Если файл с таким именем уже есть, выберите: заменить,
-добавить номер или пропустить. Решение применяется ко всей пачке.
+которые создал сам (по манифесту .autofill-manifest.json). Если файл
+с таким именем уже есть, выберите: заменить, добавить номер или
+оставить существующие (старые файлы не пересоздаются, остальные
+грамоты будут созданы). Решение применяется ко всей пачке.
 
 ГОРЯЧИЕ КЛАВИШИ
 

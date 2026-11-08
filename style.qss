@@ -525,6 +525,18 @@ QListView {
     padding: 4px;
 }
 
+QHeaderView {
+    background-color: transparent;
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: #202020;
+    color: #A0A0A0;
+    border: none;
+    padding: 4px 8px;
+}
+
 QListView::item {
     padding: 6px;
     border-radius: 5px;
@@ -944,6 +956,11 @@ QListView[theme="light"] {
     background-color: #FFFFFF;
     color: #111827;
     border-color: #E1E5EE;
+}
+
+QHeaderView[theme="light"]::section {
+    background-color: #F0F2F7;
+    color: #667085;
 }
 
 QListView[theme="light"]::item:hover {

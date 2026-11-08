@@ -9,13 +9,11 @@ from PIL import Image, ImageFont
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QApplication,
     QButtonGroup,
     QCheckBox,
-    QColorDialog,
     QComboBox,
+    QCompleter,
     QDialog,
-    QFileDialog,
     QFrame,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
@@ -33,8 +31,14 @@ from PySide6.QtWidgets import (
 
 from core.font_utils import scan_fonts
 from core.generator import RenderConfig, render_page
-from core.screen_utils import get_window_size
+from core.screen_utils import place_window_on_screen
 from ui.overlays import add_safe_area, set_safe_area_visible
+from ui.themed_dialogs import (
+    apply_theme_tree,
+    get_color,
+    get_open_file_name,
+    style_popup,
+)
 
 log = logging.getLogger(__name__)
 
@@ -177,17 +181,18 @@ class PointPickerDialog(QDialog):
         self._build_ui()
         self._apply_theme_to_children()
 
-        w, h = get_window_size(self, 0.78, 0.82)
-        self.resize(max(1040, w), max(700, h))
+        # Размер и позиция считаются по экрану родителя: у ещё не показанного
+        # диалога screen() возвращает основной монитор, а родитель может быть
+        # на втором.  Итоговый размер ограничен доступной областью экрана.
+        place_window_on_screen(
+            self,
+            parent,
+            width_ratio=0.78,
+            height_ratio=0.82,
+            min_width=1040,
+            min_height=700,
+        )
         self.setMinimumSize(900, 600)
-        if parent:
-            screen = parent.screen() or QApplication.primaryScreen()
-            if screen is not None:
-                parent_center = screen.availableGeometry().center()
-                self.move(
-                    parent_center.x() - self.width() // 2,
-                    parent_center.y() - self.height() // 2,
-                )
 
         self.scale_factor = 1.0
         self.view.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
@@ -219,18 +224,6 @@ class PointPickerDialog(QDialog):
         meta.setObjectName("dialog_meta")
         header.addWidget(meta)
         header.addStretch()
-
-        self.help_btn = QPushButton("?")
-        self.help_btn.setObjectName("help_btn")
-        self.help_btn.setFixedSize(26, 26)
-        self.help_btn.setToolTip(
-            "Правый клик: поставить точку.\n"
-            "Левая кнопка: перемещать изображение.\n"
-            "Колесо: зум. Стрелки: сдвиг. Shift: 10 px. Ctrl: 50 px.\n"
-            "Alt + движение мыши: расстояние до точки.\n"
-            "Поля для печати: отступ, за который не должен выходить текст."
-        )
-        header.addWidget(self.help_btn)
         root.addLayout(header)
 
         body = QHBoxLayout()
@@ -429,16 +422,23 @@ class PointPickerDialog(QDialog):
         layout.setSpacing(8)
 
         self.font_combo = QComboBox()
+        # Редактируемое поле: можно не только выбрать из списка, но и набрать
+        # название семейства с нуля - текст приводится к ближайшему шрифту.
+        self.font_combo.setEditable(True)
+        self.font_combo.setInsertPolicy(QComboBox.NoInsert)
         self.font_combo.setMaxVisibleItems(20)
         self.font_combo.setSizeAdjustPolicy(
             QComboBox.AdjustToMinimumContentsLengthWithIcon
         )
         self.font_combo.setMinimumContentsLength(8)
         self.font_combo.setMinimumWidth(0)
-        self.font_combo.setMaximumWidth(128)
+        self.font_combo.setMaximumWidth(176)
         self.font_combo.setEnabled(self.render_config is not None)
         self._populate_font_combo()
         self.font_combo.currentIndexChanged.connect(self._on_font_changed)
+        self.font_combo.currentTextChanged.connect(self._on_font_text_changed)
+        self.font_combo.lineEdit().returnPressed.connect(self._normalize_font_text)
+        self._install_font_completer()
         layout.addWidget(self.font_combo, 1)
 
         self.font_file_btn = QPushButton("Файл")
@@ -453,6 +453,91 @@ class PointPickerDialog(QDialog):
         self._loading_font = False
         return wrapper
 
+    def _install_font_completer(self) -> None:
+        labels = [self.font_combo.itemText(i) for i in range(self.font_combo.count())]
+        completer = QCompleter(labels, self.font_combo)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        self.font_combo.setCompleter(completer)
+        # Попап создаётся лениво; создаём его сейчас, чтобы успеть покрасить.
+        style_popup(completer.popup(), self.property("theme") or "dark")
+
+    def _on_font_text_changed(self, text: str) -> None:
+        if self._loading_font:
+            return
+        self._apply_font_text(text)
+
+    def _apply_font_text(self, text: str) -> None:
+        """Приводит набранный текст к реальному шрифту и обновляет предпросмотр.
+
+        Порядок: элемент списка → путь к файлу → семейство из скана шрифтов.
+        Если ничего не совпало, последний валидный шрифт не меняется.
+        """
+
+        text = (text or "").strip()
+        if not text:
+            return
+
+        index = self.font_combo.findText(text, Qt.MatchFixedString)
+        if index >= 0:
+            path = self.font_combo.itemData(index)
+            if path:
+                self.font_path = str(path)
+                self.font_combo.setToolTip(text)
+                self._refresh_render_config()
+            return
+
+        path = Path(text)
+        if path.is_file() and path.suffix.lower() in {".ttf", ".otf", ".ttc"}:
+            self.font_path = str(path)
+            self.font_combo.setToolTip(f"Файл: {path.name}")
+            self._refresh_render_config()
+            return
+
+        family = next(
+            (name for name in self.fonts_data if name.casefold() == text.casefold()),
+            None,
+        )
+        if family is None:
+            return
+        styles = self.fonts_data[family]
+        style = "Regular" if "Regular" in styles else next(iter(styles))
+        self.font_path = str(styles[style])
+        self.font_combo.setToolTip(family)
+        self._refresh_render_config()
+
+    def _normalize_font_text(self) -> None:
+        """По Enter дополняет неполное название до ближайшего семейства."""
+
+        if self._loading_font:
+            return
+        text = self.font_combo.currentText().strip()
+        if not text:
+            return
+
+        resolved = self.font_combo.findText(text, Qt.MatchFixedString) >= 0
+        path = Path(text)
+        if not resolved and not (
+            path.is_file() and path.suffix.lower() in {".ttf", ".otf", ".ttc"}
+        ):
+            family = next(
+                (name for name in self.fonts_data if name.casefold() == text.casefold()),
+                None,
+            )
+            if family is None:
+                prefix = text.casefold()
+                matches = [
+                    name for name in self.fonts_data if name.casefold().startswith(prefix)
+                ]
+                family = min(matches, key=len) if matches else None
+            if family is not None:
+                text = family
+                self.font_combo.blockSignals(True)
+                self.font_combo.setCurrentText(family)
+                self.font_combo.blockSignals(False)
+
+        self._apply_font_text(text)
+
     def _on_font_changed(self, index: int) -> None:
         if self._loading_font or index < 0:
             return
@@ -466,12 +551,12 @@ class PointPickerDialog(QDialog):
     def choose_font_file(self) -> None:
         if self.render_config is None:
             return
-        path, _ = QFileDialog.getOpenFileName(
+        path = get_open_file_name(
             self,
+            self.property("theme") or "dark",
             "Выберите файл шрифта",
             self.font_path or str(Path.home()),
             "Шрифты (*.ttf *.otf *.ttc)",
-            options=QFileDialog.DontUseNativeDialog,
         )
         if not path:
             return
@@ -685,10 +770,7 @@ class PointPickerDialog(QDialog):
         theme = self.property("theme")
         if not theme:
             return
-        for widget in self.findChildren(QWidget):
-            widget.setProperty("theme", theme)
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
+        apply_theme_tree(self, str(theme))
 
     # ------------------------------------------------------------------
     # Оформление текста
@@ -748,15 +830,12 @@ class PointPickerDialog(QDialog):
         label.setText(value.upper())
 
     def _pick_color(self, current, title: str) -> tuple[int, int, int] | None:
-        color = QColorDialog.getColor(
-            QColor(*current),
+        return get_color(
             self,
+            self.property("theme") or "dark",
             title,
-            QColorDialog.DontUseNativeDialog,
+            current,
         )
-        if not color.isValid():
-            return None
-        return color.red(), color.green(), color.blue()
 
     def choose_marker_color(self) -> None:
         selected = self._pick_color(self.marker_color, "Цвет крестика")
@@ -786,15 +865,10 @@ class PointPickerDialog(QDialog):
     def choose_color(self) -> None:
         if self.render_config is None:
             return
-        color = QColorDialog.getColor(
-            QColor(*self.text_color),
-            self,
-            "Цвет текста",
-            QColorDialog.DontUseNativeDialog,
-        )
-        if not color.isValid():
+        selected = self._pick_color(self.text_color, "Цвет текста")
+        if selected is None:
             return
-        self.text_color = (color.red(), color.green(), color.blue())
+        self.text_color = selected
         self._set_color_button(self.text_color)
         self._refresh_render_config()
 
