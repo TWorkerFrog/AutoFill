@@ -49,7 +49,7 @@ class RenderConfig:
     x_offset: int = 0
     y_offset: int = 0
     align: str = "left"
-    line_spacing: int = 4
+    line_spacing: int = 0
     letter_spacing: int = 0
     margin: int = 36
     name_mode: str = "single_line"

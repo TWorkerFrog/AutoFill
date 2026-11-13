@@ -43,7 +43,7 @@ class AppSettings:
     y_auto: bool = True
     x_offset: int = 0
     y_offset: int = 0
-    line_spacing: int = 4
+    line_spacing: int = 0
     margin: int = 36
     safe_area_color: tuple[int, int, int] = (139, 92, 246)
     marker_color: tuple[int, int, int] = (139, 92, 246)

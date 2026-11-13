@@ -441,9 +441,9 @@ class PointPickerDialog(QDialog):
         self._install_font_completer()
         layout.addWidget(self.font_combo, 1)
 
-        self.font_file_btn = QPushButton("Файл")
+        self.font_file_btn = QPushButton("Обзор")
         self.font_file_btn.setObjectName("link_btn")
-        self.font_file_btn.setFixedWidth(40)
+        self.font_file_btn.setFixedWidth(56)
         self.font_file_btn.setToolTip("Выбрать файл шрифта")
         self.font_file_btn.setEnabled(self.render_config is not None)
         self.font_file_btn.clicked.connect(self.choose_font_file)
@@ -553,7 +553,6 @@ class PointPickerDialog(QDialog):
             return
         path = get_open_file_name(
             self,
-            self.property("theme") or "dark",
             "Выберите файл шрифта",
             self.font_path or str(Path.home()),
             "Шрифты (*.ttf *.otf *.ttc)",
@@ -830,12 +829,7 @@ class PointPickerDialog(QDialog):
         label.setText(value.upper())
 
     def _pick_color(self, current, title: str) -> tuple[int, int, int] | None:
-        return get_color(
-            self,
-            self.property("theme") or "dark",
-            title,
-            current,
-        )
+        return get_color(self, title, current)
 
     def choose_marker_color(self) -> None:
         selected = self._pick_color(self.marker_color, "Цвет крестика")

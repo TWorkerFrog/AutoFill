@@ -1,9 +1,9 @@
-"""Тематизация диалогов и «немодные» диалоги выбора файла/цвета.
+"""Тематизация Qt-диалогов и выбор файлов/цвета нативными диалогами Windows.
 
-QFileDialog и QColorDialog создаются после применения темы к основному окну,
-поэтому без отдельной обработки они остаются в тёмных цветах даже в светлой
-теме.  Здесь собраны помощники, которые навешивают свойство ``theme`` на всё
-дерево диалога и открывают диалог уже оформленным.
+Нативные диалоги (в стиле проводника) привычнее пользователю и сами следуют
+системной теме Windows, поэтому для выбора файлов и цвета они используются
+без оформления Qt.  Помощники темизации здесь нужны для остальных диалогов
+приложения (MessageDialog, редактор грамоты).
 """
 
 from __future__ import annotations
@@ -79,57 +79,36 @@ def exec_themed(dialog: QDialog, theme: str) -> int:
     return dialog.exec()
 
 
-def _first_selected(dialog: QFileDialog, theme: str) -> str:
-    if exec_themed(dialog, theme) != int(QDialog.Accepted):
-        return ""
-    files = dialog.selectedFiles()
-    return files[0] if files else ""
-
-
 def get_open_file_name(
     parent: QWidget | None,
-    theme: str,
     caption: str,
     directory: str,
     name_filter: str,
 ) -> str:
-    """Открывает оформленный диалог выбора файла, возвращает путь или ""."""
+    """Нативный диалог выбора файла, возвращает путь или ""."""
 
-    dialog = QFileDialog(parent, caption, directory, name_filter)
-    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-    dialog.setFileMode(QFileDialog.ExistingFile)
-    return _first_selected(dialog, theme)
+    path, _selected = QFileDialog.getOpenFileName(parent, caption, directory, name_filter)
+    return path
 
 
 def get_existing_directory(
     parent: QWidget | None,
-    theme: str,
     caption: str,
     directory: str,
 ) -> str:
-    """Открывает оформленный диалог выбора папки, возвращает путь или ""."""
+    """Нативный диалог выбора папки, возвращает путь или ""."""
 
-    dialog = QFileDialog(parent, caption, directory)
-    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-    dialog.setFileMode(QFileDialog.Directory)
-    dialog.setOption(QFileDialog.ShowDirsOnly, True)
-    return _first_selected(dialog, theme)
+    return QFileDialog.getExistingDirectory(parent, caption, directory)
 
 
 def get_color(
     parent: QWidget | None,
-    theme: str,
     caption: str,
     current: tuple[int, int, int],
 ) -> tuple[int, int, int] | None:
-    """Открывает оформленный диалог выбора цвета."""
+    """Нативный диалог выбора цвета."""
 
-    dialog = QColorDialog(QColor(*current), parent)
-    dialog.setWindowTitle(caption)
-    dialog.setOption(QColorDialog.DontUseNativeDialog, True)
-    if exec_themed(dialog, theme) != int(QDialog.Accepted):
-        return None
-    color = dialog.selectedColor()
+    color = QColorDialog.getColor(QColor(*current), parent, caption)
     if not color.isValid():
         return None
     return color.red(), color.green(), color.blue()

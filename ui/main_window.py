@@ -284,7 +284,7 @@ class DiplomaGenerator(QMainWindow):
         template_label = QLabel("Шаблон:")
         grid.addWidget(template_label, 0, 0)
         grid.addWidget(self.template_edit, 0, 1, 1, 2)
-        btn_template = QPushButton("Выбрать")
+        btn_template = QPushButton("Обзор")
         btn_template.setObjectName("link_btn")
         btn_template.clicked.connect(self.choose_template)
         grid.addWidget(btn_template, 0, 3)
@@ -304,7 +304,7 @@ class DiplomaGenerator(QMainWindow):
         self.style_combo.currentTextChanged.connect(self._on_style_changed)
         grid.addWidget(self.style_combo, 1, 2)
 
-        btn_font_file = QPushButton("Файл")
+        btn_font_file = QPushButton("Обзор")
         btn_font_file.setObjectName("link_btn")
         btn_font_file.clicked.connect(self.choose_font_file)
         grid.addWidget(btn_font_file, 1, 3)
@@ -468,7 +468,7 @@ class DiplomaGenerator(QMainWindow):
         offset_grid.addWidget(interval_label, 1, 0)
         self.line_spacing_spin = QSpinBox()
         self.line_spacing_spin.setRange(0, 500)
-        self.line_spacing_spin.setValue(4)
+        self.line_spacing_spin.setValue(0)
         # Та же компактная ширина, что у поля «Размер» на вкладке «Основные».
         self.line_spacing_spin.setFixedWidth(96)
         offset_grid.addWidget(self.line_spacing_spin, 1, 2)
@@ -522,6 +522,8 @@ class DiplomaGenerator(QMainWindow):
         params_form.addRow("Слов на первой строке:", self.split_after_spin)
         self.margin_spin = QSpinBox()
         self.margin_spin.setRange(0, 100000)
+        # 36 px по умолчанию: у шаблонов обычно есть технические поля,
+        # и без запаса текст сразу «вылезает» за границы.
         self.margin_spin.setValue(36)
         self.margin_spin.setFixedWidth(96)
         params_form.addRow("Поля для печати:", self.margin_spin)
@@ -924,7 +926,6 @@ class DiplomaGenerator(QMainWindow):
     def choose_template(self) -> None:
         path = get_open_file_name(
             self,
-            self.current_theme,
             "Выберите шаблон грамоты",
             self.template_path or str(Path.home()),
             "Изображения (*.jpg *.jpeg *.png)",
@@ -940,7 +941,6 @@ class DiplomaGenerator(QMainWindow):
     def choose_font_file(self) -> None:
         path = get_open_file_name(
             self,
-            self.current_theme,
             "Выберите файл шрифта",
             self.font_path or str(Path.home()),
             "Шрифты (*.ttf *.otf *.ttc)",
@@ -960,7 +960,7 @@ class DiplomaGenerator(QMainWindow):
         self.color_preview.setStyleSheet(f"background-color: {value};")
 
     def choose_color(self) -> None:
-        color = get_color(self, self.current_theme, "Цвет текста", self.text_color)
+        color = get_color(self, "Цвет текста", self.text_color)
         if color is not None:
             self.text_color = color
             self._set_color_preview(self.text_color)
@@ -1152,7 +1152,6 @@ class DiplomaGenerator(QMainWindow):
     def choose_output_dir(self) -> None:
         path = get_existing_directory(
             self,
-            self.current_theme,
             "Выберите папку для сохранения",
             self.output_dir_edit.text() or self._default_output_dir(),
         )
@@ -1453,7 +1452,7 @@ class DiplomaGenerator(QMainWindow):
         self.y_edit.setValue(0)
         self.x_offset_spin.setValue(0)
         self.y_offset_spin.setValue(0)
-        self.line_spacing_spin.setValue(4)
+        self.line_spacing_spin.setValue(0)
         self.rb_left.setChecked(True)
         self._schedule_preview()
 
@@ -1463,7 +1462,6 @@ class DiplomaGenerator(QMainWindow):
     def load_names_file(self) -> None:
         path = get_open_file_name(
             self,
-            self.current_theme,
             "Выберите файл со списком",
             str(Path.home()),
             "Текст (*.txt *.csv);;Все файлы (*)",

@@ -92,7 +92,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.x, 0)
         self.assertEqual(settings.x_offset, 0)
         self.assertEqual(settings.y_offset, 0)
-        self.assertEqual(settings.line_spacing, 4)
+        self.assertEqual(settings.line_spacing, 0)
         self.assertEqual(settings.margin, 36)
         self.assertEqual(settings.split_after, 1)
         self.assertEqual(settings.text_color, (0, 0, 0))
