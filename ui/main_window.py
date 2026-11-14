@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSpinBox,
     QSplitter,
     QTabWidget,
@@ -154,17 +155,18 @@ class DiplomaGenerator(QMainWindow):
         self.main_splitter.setObjectName("main_splitter")
         self.tabs = QTabWidget()
         self.tabs.setObjectName("main_tabs")
+        self.tabs.setMinimumWidth(560)
         self.tabs.tabBar().setExpanding(False)
         self.tab_main = QWidget()
         self.tab_position = QWidget()
         self.tab_format = QWidget()
         self.tab_output = QWidget()
         self.tab_settings = QWidget()
-        self.tabs.addTab(self.tab_main, "Основные")
-        self.tabs.addTab(self.tab_position, "Позиция")
-        self.tabs.addTab(self.tab_format, "Имя")
-        self.tabs.addTab(self.tab_output, "Вывод")
-        self.tabs.addTab(self.tab_settings, "Настройки")
+        self.tabs.addTab(self._wrap_tab(self.tab_main), "Основные")
+        self.tabs.addTab(self._wrap_tab(self.tab_position), "Позиция")
+        self.tabs.addTab(self._wrap_tab(self.tab_format), "Имя")
+        self.tabs.addTab(self._wrap_tab(self.tab_output), "Вывод")
+        self.tabs.addTab(self._wrap_tab(self.tab_settings), "Настройки")
 
         help_btn = QPushButton("?", self.tabs)
         help_btn.setObjectName("help_btn")
@@ -264,6 +266,16 @@ class DiplomaGenerator(QMainWindow):
         self.action_generate.setShortcut(QKeySequence("Ctrl+G"))
         self.action_generate.triggered.connect(self.generate_all)
         self.addAction(self.action_generate)
+
+    def _wrap_tab(self, page: QWidget) -> QScrollArea:
+        page.setObjectName("tab_page")
+        scroll = QScrollArea()
+        scroll.setObjectName("tab_scroll")
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(page)
+        return scroll
 
     def build_tab_main(self) -> None:
         layout = QVBoxLayout(self.tab_main)
@@ -413,29 +425,30 @@ class DiplomaGenerator(QMainWindow):
         align_row.addStretch()
         align_layout.addLayout(align_row)
 
-        x_row = QHBoxLayout()
-        x_row.addWidget(QLabel("X:"))
+        coords = QGridLayout()
+        coords.setHorizontalSpacing(10)
+        coords.setVerticalSpacing(10)
+        coords.addWidget(QLabel("X:"), 0, 0)
         self.x_edit = QSpinBox()
         self.x_edit.setRange(0, 100000)
         self.x_edit.setFixedWidth(96)
-        x_row.addWidget(self.x_edit)
+        coords.addWidget(self.x_edit, 0, 1)
         self.x_auto_check = QCheckBox("Автоцентр по X")
         self.x_auto_check.setChecked(True)
         self.x_auto_check.toggled.connect(self._on_auto_toggled)
-        x_row.addWidget(self.x_auto_check)
+        coords.addWidget(self.x_auto_check, 0, 2)
 
-        x_row.addSpacing(20)
-        x_row.addWidget(QLabel("Y:"))
+        coords.addWidget(QLabel("Y:"), 1, 0)
         self.y_edit = QSpinBox()
         self.y_edit.setRange(0, 100000)
         self.y_edit.setFixedWidth(96)
-        x_row.addWidget(self.y_edit)
+        coords.addWidget(self.y_edit, 1, 1)
         self.y_auto_check = QCheckBox("Автоцентр по Y")
         self.y_auto_check.setChecked(True)
         self.y_auto_check.toggled.connect(self._on_auto_toggled)
-        x_row.addWidget(self.y_auto_check)
-        x_row.addStretch()
-        align_layout.addLayout(x_row)
+        coords.addWidget(self.y_auto_check, 1, 2)
+        coords.setColumnStretch(3, 1)
+        align_layout.addLayout(coords)
         layout.addWidget(align_group)
 
         offset_group = QGroupBox("Смещение и интервалы")

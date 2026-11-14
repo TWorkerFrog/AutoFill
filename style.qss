@@ -469,6 +469,14 @@ QSpinBox::down-arrow {
 QCheckBox,
 QRadioButton {
     spacing: 8px;
+    min-height: 20px;
+}
+
+QScrollArea#tab_scroll,
+QScrollArea#tab_scroll > QWidget > QWidget,
+QWidget#tab_page {
+    background-color: transparent;
+    border: none;
 }
 
 QCheckBox::indicator {
