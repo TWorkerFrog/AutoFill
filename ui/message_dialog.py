@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.i18n import tr
 from core.screen_utils import get_window_size
 
 
@@ -61,7 +62,7 @@ class MessageDialog(QDialog):
         button_layout.setSpacing(8)
         button_layout.addStretch()
 
-        button_specs = buttons or [("Закрыть", "primary")]
+        button_specs = buttons or [(tr("Закрыть"), "primary")]
         default_index = max(0, min(int(default_btn), len(button_specs) - 1))
 
         for index, (button_text, role) in enumerate(button_specs):

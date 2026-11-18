@@ -11,7 +11,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsScene
 
-SAFE_AREA_COLOR = QColor("#8B5CF6")
+SAFE_AREA_COLOR = QColor("#FA0909")
 
 
 def safe_area_rect(width: int, height: int, margin: int) -> QRectF | None:

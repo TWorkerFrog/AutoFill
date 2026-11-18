@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.i18n import tr
+
 
 class PreviewPane(QFrame):
     """Компактный живой предпросмотр справа от настроек."""
@@ -28,14 +30,14 @@ class PreviewPane(QFrame):
 
         header = QHBoxLayout()
         header.setSpacing(6)
-        title = QLabel("Живой предпросмотр")
+        title = QLabel(tr("Живой предпросмотр"))
         title.setObjectName("preview_title")
         header.addWidget(title)
         header.addStretch()
 
-        self.open_button = QPushButton("Редактировать")
+        self.open_button = QPushButton(tr("Редактировать"))
         self.open_button.setObjectName("link_btn")
-        self.open_button.setToolTip("Открыть редактор грамоты")
+        self.open_button.setToolTip(tr("Открыть редактор грамоты"))
         self.open_button.setAutoDefault(False)
         self.open_button.clicked.connect(self.openRequested)
         header.addWidget(self.open_button)
@@ -47,7 +49,7 @@ class PreviewPane(QFrame):
         canvas_layout.setContentsMargins(8, 8, 8, 8)
         canvas_layout.setSpacing(0)
 
-        self.image_label = QLabel("Выберите шаблон, шрифт и добавьте ФИО")
+        self.image_label = QLabel(tr("Выберите шаблон, шрифт и добавьте ФИО"))
         self.image_label.setObjectName("preview_image")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setWordWrap(True)
@@ -56,7 +58,7 @@ class PreviewPane(QFrame):
         canvas_layout.addWidget(self.image_label)
         layout.addWidget(self.canvas, 1)
 
-        self.hint_label = QLabel("Двойной клик: открыть редактор")
+        self.hint_label = QLabel(tr("Двойной клик: открыть редактор"))
         self.hint_label.setObjectName("hint_label")
         self.hint_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hint_label)
@@ -92,7 +94,7 @@ class PreviewPane(QFrame):
         self.hint_label.hide()
 
     def clear(self) -> None:
-        self.set_message("Выберите шаблон, шрифт и добавьте ФИО")
+        self.set_message(tr("Выберите шаблон, шрифт и добавьте ФИО"))
 
     def _rescale(self) -> None:
         if self._original is None or self._original.isNull():

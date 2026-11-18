@@ -22,6 +22,27 @@ _STYLE_SUFFIXES = (
     "Thin", "Light", "Regular", "Medium", "Bold", "Black", "Italic",
 )
 
+# Порядок начертаний в выпадающих списках: от тонких к жирным, курсив после.
+STYLE_ORDER = [
+    "Thin", "ExtraLight", "UltraLight", "Light", "Regular", "Book", "Medium",
+    "SemiBold", "Bold", "ExtraBold", "UltraBold", "Black", "Oblique", "Italic",
+    "Thin Italic", "ExtraLight Italic", "UltraLight Italic", "Light Italic",
+    "Medium Italic", "SemiBold Italic", "Bold Italic", "ExtraBold Italic",
+    "UltraBold Italic", "Black Italic",
+]
+
+
+def ordered_style_names(styles) -> list[str]:
+    """Сортирует имена начертаний по TYPE_ORDER, неизвестные - в конец."""
+
+    return sorted(
+        styles,
+        key=lambda value: (
+            STYLE_ORDER.index(value) if value in STYLE_ORDER else len(STYLE_ORDER),
+            value.casefold(),
+        ),
+    )
+
 
 def _cache_path() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")

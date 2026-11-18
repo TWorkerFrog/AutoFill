@@ -67,6 +67,15 @@ class TextRenderTests(unittest.TestCase):
         self.assertAlmostEqual(layout.right, 700, delta=0.5)
         self.assertAlmostEqual(layout.line_left(0), 700 - layout.metrics.width, delta=0.5)
 
+    def test_numeric_y_means_vertical_center(self):
+        draw_text_block(
+            self.draw, ["Тест"], self.font, (0, 0, 0),
+            100, 300, 0, 0, "left", 0, 0, 800, 600,
+        )
+        bbox = _ink_bbox(self.image)
+        self.assertIsNotNone(bbox)
+        self.assertLessEqual(abs((bbox[1] + bbox[3]) / 2 - 300), 10)
+
     def test_measure_block_uses_font_line_height(self):
         metrics = measure_block(["Одна", "Две"], self.font, letter_spacing=4, line_spacing=10)
         ascent, descent = self.font.getmetrics()

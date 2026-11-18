@@ -43,7 +43,7 @@ DEFAULT_DPI = 150.0
 class RenderConfig:
     font_path: str
     font_size: int
-    text_color: tuple[int, int, int] = (0, 0, 0)
+    text_color: tuple[int, int, int, int] = (0, 0, 0, 255)
     x: int | str = 0
     y: int | str = 0
     x_offset: int = 0
@@ -136,20 +136,22 @@ def lines_for_parts(parts: Sequence[str], config: RenderConfig, font, img_width:
     return lines
 
 
-def render_page(
-    template: Image.Image,
-    parts: Sequence[str],
+def _draw_text(
+    image: Image.Image,
+    lines: Sequence[str],
     font,
+    color: tuple[int, int, int, int],
     config: RenderConfig,
-) -> Image.Image:
-    img = template.copy()
-    draw = ImageDraw.Draw(img)
-    lines = lines_for_parts(parts, config, font, img.width)
+) -> None:
+    """Рисует текст с учётом альфа-канала цвета."""
+
+    red, green, blue, alpha = (list(color) + [255])[:4]
+    draw = ImageDraw.Draw(image)
     draw_text_block(
         draw,
         lines,
         font,
-        config.text_color,
+        (red, green, blue, alpha),
         config.x,
         config.y,
         config.x_offset,
@@ -157,10 +159,35 @@ def render_page(
         config.align,
         config.line_spacing,
         config.letter_spacing,
-        img.width,
-        img.height,
+        image.width,
+        image.height,
     )
-    return img
+
+
+def render_page(
+    template: Image.Image,
+    parts: Sequence[str],
+    font,
+    config: RenderConfig,
+) -> Image.Image:
+    img = template.copy()
+    lines = lines_for_parts(parts, config, font, img.width)
+    red, green, blue, alpha = (list(config.text_color) + [255])[:4]
+    if alpha >= 255:
+        _draw_text(img, lines, font, config.text_color, config)
+        return img
+
+    # Полупрозрачный текст рисуем на отдельном слое и накладываем на шаблон,
+    # иначе PIL на RGB-изображении просто игнорирует альфу.
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    _draw_text(overlay, lines, font, (red, green, blue, 255), config)
+    channel = overlay.getchannel("A").point(lambda value: value * alpha // 255)
+    overlay.putalpha(channel)
+    base = img.convert("RGBA")
+    base.alpha_composite(overlay)
+    if img.mode == "RGBA":
+        return base
+    return base.convert("RGB")
 
 
 def _flatten_to_rgb(image: Image.Image) -> Image.Image:

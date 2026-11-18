@@ -9,9 +9,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QColorDialog,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -104,11 +102,13 @@ def get_existing_directory(
 def get_color(
     parent: QWidget | None,
     caption: str,
-    current: tuple[int, int, int],
-) -> tuple[int, int, int] | None:
-    """Нативный диалог выбора цвета."""
+    current: tuple[int, int, int, int],
+) -> tuple[int, int, int, int] | None:
+    """Пикер цвета в стиле Figma: альфа в процентах, hex, своя тема."""
 
-    color = QColorDialog.getColor(QColor(*current), parent, caption)
-    if not color.isValid():
-        return None
-    return color.red(), color.green(), color.blue()
+    from ui.color_picker import open_color_picker
+
+    theme = "dark"
+    if parent is not None:
+        theme = str(parent.property("theme") or "dark")
+    return open_color_picker(parent, theme, caption, current)

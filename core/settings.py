@@ -13,7 +13,7 @@ from core.paths import backup_corrupt_file, load_json, write_json_atomic
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def app_data_dir() -> Path:
@@ -35,7 +35,7 @@ class AppSettings:
     selected_font_family: str = ""
     selected_font_style: str = "Regular"
     font_size: int = 100
-    text_color: tuple[int, int, int] = (0, 0, 0)
+    text_color: tuple[int, int, int, int] = (0, 0, 0, 255)
     letter_spacing: int = 0
     x: int = 0
     y: int = 0
@@ -45,8 +45,8 @@ class AppSettings:
     y_offset: int = 0
     line_spacing: int = 0
     margin: int = 36
-    safe_area_color: tuple[int, int, int] = (139, 92, 246)
-    marker_color: tuple[int, int, int] = (139, 92, 246)
+    safe_area_color: tuple[int, int, int, int] = (250, 9, 9, 255)
+    marker_color: tuple[int, int, int, int] = (250, 9, 9, 255)
     align: str = "left"
     name_mode: str = "single_line"
     split_after: int = 1
@@ -58,6 +58,8 @@ class AppSettings:
     preview_mode: str = "test"
     preview_custom: str = ""
     theme: str = "dark"
+    language: str = "ru"
+    color_input_format: str = "Hex"
     ask_before_move: bool = True
     cleanup_previous: bool = False
     window_geometry: str = ""
@@ -90,18 +92,30 @@ def _parse_bool(value: Any, default: bool) -> bool:
 
 
 
-def _parse_color(value: Any) -> tuple[int, int, int]:
+def _parse_color(value: Any) -> tuple[int, int, int, int]:
+    """Разбирает RGB или RGBA. Старые настройки без альфы получают 255."""
+
     if isinstance(value, (list, tuple)) and len(value) >= 3:
         try:
-            return tuple(_clamp(int(part), 0, 255) for part in value[:3])  # type: ignore[return-value]
+            parts = [_clamp(int(part), 0, 255) for part in value[:4]]
         except (TypeError, ValueError):
-            pass
-    if isinstance(value, str) and value.startswith("#") and len(value) == 7:
-        try:
-            return tuple(int(value[index:index + 2], 16) for index in (1, 3, 5))  # type: ignore[return-value]
-        except ValueError:
-            pass
-    return (0, 0, 0)
+            parts = []
+        if len(parts) >= 3:
+            if len(parts) == 3:
+                parts.append(255)
+            return tuple(parts[:4])  # type: ignore[return-value]
+    if isinstance(value, str) and value.startswith("#"):
+        digits = value[1:]
+        if len(digits) in {6, 8}:
+            try:
+                parts = [int(digits[index:index + 2], 16) for index in range(0, len(digits), 2)]
+            except ValueError:
+                parts = []
+            if len(parts) == 3:
+                parts.append(255)
+            if len(parts) == 4:
+                return tuple(parts)  # type: ignore[return-value]
+    return (0, 0, 0, 255)
 
 
 def normalize_settings(raw: dict[str, Any] | None) -> AppSettings:
@@ -157,6 +171,13 @@ def normalize_settings(raw: dict[str, Any] | None) -> AppSettings:
         data["pdf_mode"] = defaults.pdf_mode
     if not isinstance(data.get("theme"), str) or data["theme"] not in {"dark", "light", "system"}:
         data["theme"] = defaults.theme
+    if not isinstance(data.get("language"), str) or data["language"] not in {"ru", "en"}:
+        data["language"] = defaults.language
+    if (
+        not isinstance(data.get("color_input_format"), str)
+        or data["color_input_format"] not in {"Hex", "RGB", "HSL"}
+    ):
+        data["color_input_format"] = defaults.color_input_format
     if not isinstance(data.get("preview_mode"), str) or data["preview_mode"] not in {
         "test", "longest", "custom",
     }:

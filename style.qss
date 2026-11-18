@@ -184,6 +184,12 @@ QLabel#editor_info {
     padding: 4px 0;
 }
 
+QLabel#editor_hint {
+    color: #8A8A8A;
+    font-size: 11px;
+    padding: 2px 0 0 0;
+}
+
 QLabel#inspector_heading {
     color: #A0A0A0;
     font-size: 10px;
@@ -363,6 +369,53 @@ QPushButton#color_swatch {
 
 QPushButton#color_swatch:hover {
     border-color: #A78BFA;
+}
+
+/* Строка цвета в стиле Figma: плашка и hex внутри одного инпута. */
+QFrame#color_field {
+    background-color: #171717;
+    border: 1px solid #333333;
+    border-radius: 8px;
+}
+
+QFrame#color_field:hover {
+    border-color: #3A3A3A;
+}
+
+QFrame#color_field QLineEdit {
+    background-color: transparent;
+    border: none;
+    padding: 2px;
+    selection-background-color: #8B5CF6;
+    selection-color: #FFFFFF;
+}
+
+QFrame#color_field QSpinBox {
+    background-color: transparent;
+    border: none;
+    padding: 2px;
+    selection-background-color: #8B5CF6;
+    selection-color: #FFFFFF;
+}
+
+QLabel#color_alpha {
+    color: #A0A0A0;
+    font-size: 12px;
+}
+
+QPushButton#color_chip {
+    padding: 0;
+    border: 1px solid #3A3A3A;
+    border-radius: 5px;
+}
+
+QPushButton#color_chip:hover {
+    border-color: #A78BFA;
+}
+
+QFrame#color_sep {
+    background-color: #3A3A3A;
+    border: none;
 }
 
 QToolButton#section_toggle {
@@ -766,6 +819,7 @@ QLabel#secondary_label[theme="light"],
 QLabel#status_label[theme="light"],
 QLabel#zoom_label[theme="light"],
 QLabel#editor_info[theme="light"],
+QLabel#editor_hint[theme="light"],
 QLabel#inspector_heading[theme="light"],
 QLabel#field_label[theme="light"] {
     color: #667085;
@@ -871,6 +925,32 @@ QPushButton#help_btn[theme="light"]:hover {
 
 QPushButton#color_swatch[theme="light"] {
     border-color: #CBD2E0;
+}
+
+QFrame#color_field[theme="light"] {
+    background-color: #FFFFFF;
+    border-color: #E1E5EE;
+}
+
+QFrame#color_field[theme="light"]:hover {
+    border-color: #CBD2E0;
+}
+
+QPushButton#color_chip[theme="light"] {
+    border-color: #CBD2E0;
+}
+
+QFrame#color_sep[theme="light"] {
+    background-color: #CBD2E0;
+}
+
+QLabel#color_alpha {
+    color: #A0A0A0;
+    font-size: 12px;
+}
+
+QLabel#color_alpha[theme="light"] {
+    color: #667085;
 }
 
 QToolButton#section_toggle[theme="light"] {

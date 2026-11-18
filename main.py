@@ -7,8 +7,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 import resources_rc  # noqa: F401  # регистрирует встроенные Qt-ресурсы
+from core.i18n import install_qt_translations, set_language
 from core.screen_utils import center_window
-from core.settings import app_data_dir
+from core.settings import SettingsStore, app_data_dir
 from core.version import APP_NAME
 from ui.main_window import DiplomaGenerator
 
@@ -66,6 +67,14 @@ if __name__ == "__main__":
     app.setOrganizationName("TWorker")
     install_exception_hook()
 
+    loaded_settings = SettingsStore().load()
+    set_language(loaded_settings.language)
+    install_qt_translations(app, loaded_settings.language)
+
+    from ui.color_picker import set_color_format
+
+    set_color_format(loaded_settings.color_input_format)
+
     icon = QIcon(":/icons/app_icon.ico")
     if icon.isNull():
         icon_path = resource_path("icons/app_icon.ico")
@@ -84,6 +93,15 @@ if __name__ == "__main__":
         window.setWindowIcon(icon)
 
     center_window(window)
-    window.show()
+    # При смене языка приложение перезапускает само себя.  Новый процесс
+    # ненадолго задерживает показ окна, чтобы старый успел закрыться и два
+    # окна не мелькали одновременно.
+    restart_delay = int(os.environ.get("AUTOFILL_RESTART_DELAY_MS", "0") or 0)
+    if restart_delay > 0:
+        from PySide6.QtCore import QTimer
+
+        QTimer.singleShot(restart_delay, window.show)
+    else:
+        window.show()
 
     sys.exit(app.exec())

@@ -133,7 +133,10 @@ def resolve_block_origin(
     - числовой ``x`` - левый/центральный/правый край блока в зависимости от
       ``align``;
     - ``y == "center"`` - блок центрируется по вертикали;
-    - числовой ``y`` - верх блока.
+    - числовой ``y`` - вертикальный центр блока.
+
+    Центр по вертикали выбран намеренно: крестик в редакторе показывает
+    середину текста, а не его верхний угол.
     """
 
     if x == "center":
@@ -145,7 +148,11 @@ def resolve_block_origin(
     else:
         left = float(x)
 
-    top = (img_height - block_height) / 2.0 if y == "center" else float(y)
+    top = (
+        (img_height - block_height) / 2.0
+        if y == "center"
+        else float(y) - block_height / 2.0
+    )
 
     return left + x_offset, top + y_offset
 

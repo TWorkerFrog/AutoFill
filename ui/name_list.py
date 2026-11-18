@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from core.i18n import tr
 
 
 class NameListEditor(QWidget):
@@ -47,14 +49,10 @@ class NameListEditor(QWidget):
         self.title_label = QLabel(title)
         header.addWidget(self.title_label)
         header.addStretch()
-        self.count_label = QLabel("0")
-        self.count_label.setObjectName("secondary_label")
-        header.addWidget(self.count_label)
         if show_header:
             layout.addLayout(header)
         else:
             self.title_label.hide()
-            self.count_label.hide()
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText(search_placeholder)
@@ -80,17 +78,24 @@ class NameListEditor(QWidget):
 
         buttons = QHBoxLayout()
         self.buttons_layout = buttons
-        self.load_button = QPushButton("Загрузить файл")
+        self.load_button = QPushButton(tr("Загрузить файл"))
         self.load_button.setObjectName("link_btn")
         self.load_button.setVisible(show_load)
         buttons.addWidget(self.load_button)
 
-        self.clear_button = QPushButton("Очистить")
+        self.clear_button = QPushButton(tr("Очистить"))
         self.clear_button.setObjectName("link_btn")
         self.clear_button.setVisible(show_clear)
         self.clear_button.clicked.connect(self.clear)
         buttons.addWidget(self.clear_button)
         buttons.addStretch()
+
+        # Счётчик живёт в правом нижнем углу списка, а не в шапке.
+        self.count_label = QLabel(tr("ФИО: 0"))
+        self.count_label.setObjectName("secondary_label")
+        self.count_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.count_label.setToolTip(tr("Сколько ФИО в списке"))
+        buttons.addWidget(self.count_label)
         layout.addLayout(buttons)
 
         self._update_count()
@@ -150,8 +155,10 @@ class NameListEditor(QWidget):
         self.clear_button.setEnabled(not self._filter_active)
         self.filter_hint.setVisible(self._filter_active)
         self.filter_hint.setText(
-            "Пока активен поиск, список доступен только для чтения. "
-            "Очистите поиск, чтобы редактировать."
+            tr(
+                "Пока активен поиск, список доступен только для чтения. "
+                "Очистите поиск, чтобы редактировать."
+            )
             if self._filter_active else ""
         )
         self._refresh_display()
@@ -179,7 +186,11 @@ class NameListEditor(QWidget):
         query = self.search_edit.text().strip()
         if query:
             visible = sum(1 for line in self._source_text.splitlines() if query.casefold() in line.casefold())
-            self.count_label.setText(f"{visible} из {total}")
+            self.count_label.setText(
+                tr("Найдено: {visible} из {total}").format(visible=visible, total=total)
+            )
+            self.count_label.setToolTip(tr("Сколько строк подходит под поиск"))
         else:
-            self.count_label.setText(str(total))
+            self.count_label.setText(tr("ФИО: {count}").format(count=total))
+            self.count_label.setToolTip(tr("Сколько ФИО в списке"))
         self.countChanged.emit(total)

@@ -221,6 +221,31 @@ class GeneratorTests(unittest.TestCase):
         self.assertTrue(result.cancelled)
         self.assertEqual(result.files, [])
 
+    def test_semi_transparent_text_is_blended(self):
+        from PIL import ImageFont
+
+        from core.generator import render_page
+
+        with Image.open(self.template) as source:
+            template = source.convert("RGB")
+        font = ImageFont.truetype(self.font_path, 28)
+        config = RenderConfig(
+            font_path=self.font_path,
+            font_size=28,
+            text_color=(0, 0, 0, 128),
+            x="center",
+            y="center",
+            align="center",
+        )
+        image = render_page(template, ["Тест"], font, config)
+        colors = image.getcolors(maxcolors=1_000_000) or []
+        self.assertTrue(
+            any(
+                40 < red < 200 and red == green == blue
+                for _count, (red, green, blue) in colors
+            )
+        )
+
     def test_cleanup_manifest_does_not_touch_foreign_files(self):
         output = self.directory / "out"
         output.mkdir()

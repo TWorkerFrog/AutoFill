@@ -29,13 +29,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.font_utils import scan_fonts
+from core.font_utils import ordered_style_names, scan_fonts
 from core.generator import RenderConfig, render_page
+from core.i18n import tr, translate_widget_tree
 from core.screen_utils import place_window_on_screen
+from ui.color_field import ColorField, clamp_rgba
 from ui.overlays import add_safe_area, set_safe_area_visible
 from ui.themed_dialogs import (
     apply_theme_tree,
-    get_color,
     get_open_file_name,
     style_popup,
 )
@@ -62,8 +63,8 @@ class PointPickerDialog(QDialog):
         safe_margin: int | None = None,
         auto_x: bool = False,
         auto_y: bool = False,
-        safe_area_color: tuple[int, int, int] | None = None,
-        marker_color: tuple[int, int, int] | None = None,
+        safe_area_color: tuple[int, int, int, int] | None = None,
+        marker_color: tuple[int, int, int, int] | None = None,
         fonts_data: dict[str, dict[str, str]] | None = None,
     ):
         super().__init__(parent)
@@ -74,8 +75,8 @@ class PointPickerDialog(QDialog):
         self.point_changed = False
         self.auto_x = bool(auto_x)
         self.auto_y = bool(auto_y)
-        self.safe_area_color = tuple(safe_area_color or (139, 92, 246))
-        self.marker_color = tuple(marker_color or (139, 92, 246))
+        self.safe_area_color = tuple(safe_area_color or (139, 92, 246, 255))
+        self.marker_color = tuple(marker_color or (139, 92, 246, 255))
         self.render_config = render_config
         self.preview_parts = list(preview_parts or [])
         self.fonts_data = fonts_data if fonts_data is not None else scan_fonts()
@@ -85,6 +86,8 @@ class PointPickerDialog(QDialog):
             else ""
         )
         self._loading_font = True
+        self.font_family: str | None = None
+        self._selected_style: str | None = None
         if safe_margin is None and render_config is not None:
             safe_margin = render_config.margin
         self.safe_margin = max(0, int(safe_margin or 0))
@@ -121,7 +124,7 @@ class PointPickerDialog(QDialog):
             self.preview_base_image = self.base_image
 
         self.text_color = tuple(
-            render_config.text_color if render_config is not None else (0, 0, 0)
+            render_config.text_color if render_config is not None else (0, 0, 0, 255)
         )
         self.letter_spacing = int(
             render_config.letter_spacing if render_config is not None else 0
@@ -205,6 +208,7 @@ class PointPickerDialog(QDialog):
 
         self.draw_marker()
         self._render_preview()
+        translate_widget_tree(self)
         self.view.setFocus()
 
     # ------------------------------------------------------------------
@@ -236,12 +240,31 @@ class PointPickerDialog(QDialog):
         canvas_layout.setSpacing(14)
         canvas_layout.addWidget(self.view, 1)
         canvas_layout.addLayout(self._build_zoom_bar())
+        self.hint_label = QLabel(
+            " · ".join(
+                tr(part)
+                for part in (
+                    "ПКМ: поставить и тянуть крестик",
+                    "ЛКМ + перетаскивание: двигать изображение",
+                    "Колесо: масштаб",
+                    "Стрелки: сдвиг на 1 px",
+                    "Shift + стрелки: 10 px",
+                    "Ctrl + стрелки: 50 px",
+                    "Alt: расстояние до крестика",
+                )
+            )
+        )
+        self.hint_label.setObjectName("editor_hint")
+        self.hint_label.setWordWrap(True)
+        canvas_layout.addWidget(self.hint_label)
         canvas_layout.addWidget(self.info_label)
         body.addWidget(canvas, 1)
 
         inspector = QFrame()
         inspector.setObjectName("inspector")
-        inspector.setFixedWidth(286)
+        # 340 px: ряд цвета по рефу Figma (плашка + значение + процент)
+        # требует ~280 px контента, плюс строка шрифта с кнопкой «Обзор».
+        inspector.setFixedWidth(340)
         inspector_layout = QVBoxLayout(inspector)
         inspector_layout.setContentsMargins(0, 0, 0, 0)
         inspector_layout.setSpacing(0)
@@ -263,10 +286,15 @@ class PointPickerDialog(QDialog):
             self._field_row("Шрифт", self._build_font_combo())
         )
         content_layout.addLayout(
+            self._field_row("Начертание", self.style_combo)
+        )
+        content_layout.addLayout(
             self._field_row("Размер", self._build_font_size_spin())
         )
         content_layout.addLayout(
-            self._field_row("Цвет", self._build_color_row())
+            self._field_row(
+                "Цвет", self._build_color_row(), stretch=False
+            )
         )
         content_layout.addLayout(
             self._field_row("Интервал", self._build_letter_spacing_spin())
@@ -276,15 +304,20 @@ class PointPickerDialog(QDialog):
         content_layout.addWidget(self._heading("Положение"))
         content_layout.addWidget(self._build_align_segments())
         content_layout.addWidget(self._build_auto_row())
+        content_layout.addWidget(self._build_coord_row())
         content_layout.addLayout(
-            self._field_row("Крестик", self._build_marker_color_row())
+            self._field_row(
+                "Крестик", self._build_marker_color_row(), stretch=False
+            )
         )
 
         content_layout.addSpacing(10)
         content_layout.addWidget(self._heading("Печать"))
         content_layout.addLayout(self._build_margin_row())
         content_layout.addLayout(
-            self._field_row("Линия", self._build_safe_color_row())
+            self._field_row(
+                "Линия", self._build_safe_color_row(), stretch=False
+            )
         )
         self.safe_check = QCheckBox("Показывать поля для печати")
         self.safe_check.setObjectName("safe_area_check")
@@ -325,12 +358,23 @@ class PointPickerDialog(QDialog):
         self.ok_btn.setObjectName("primary_btn")
         self.ok_btn.setMinimumWidth(160)
         self.ok_btn.setMinimumHeight(38)
-        self.ok_btn.setDefault(True)
-        self.ok_btn.setAutoDefault(True)
+        # Без кнопки по умолчанию: Enter в поле ввода не должен закрывать
+        # редактор и случайно применять изменения.
+        self.ok_btn.setDefault(False)
+        self.ok_btn.setAutoDefault(False)
         self.ok_btn.clicked.connect(self.accept)
         footer_layout.addWidget(self.ok_btn)
 
         root.addWidget(footer)
+
+        # Единая колонка меток: все метки рядов фиксируются по самой широкой
+        # («Начертание»), поэтому каждое поле начинается с одной линии и не
+        # растягивается — лишняя ширина уходит в пустое пространство справа.
+        field_labels = self.findChildren(QLabel, "field_label")
+        if field_labels:
+            column = max(label.sizeHint().width() for label in field_labels)
+            for label in field_labels:
+                label.setFixedWidth(column)
 
     @staticmethod
     def _heading(text: str) -> QLabel:
@@ -339,14 +383,26 @@ class PointPickerDialog(QDialog):
         return label
 
     @staticmethod
-    def _field_row(label_text: str, widget: QWidget) -> QHBoxLayout:
+    def _field_row(
+        label_text: str,
+        widget: QWidget,
+        *,
+        stretch: bool = True,
+    ) -> QHBoxLayout:
+        """Ряд «метка + поле».  Для полей фиксированной ширины (цветовых)
+        stretch=False прижимает их к метке: лейаут иначе центрирует
+        виджеты, которые не могут заполнить выделенную ячейку."""
+
         row = QHBoxLayout()
         row.setSpacing(10)
         label = QLabel(label_text)
         label.setObjectName("field_label")
         label.setMinimumWidth(64)
         row.addWidget(label)
-        row.addWidget(widget, 1)
+        if stretch:
+            row.addWidget(widget, 1)
+        else:
+            row.addWidget(widget, 0, Qt.AlignLeft)
         return row
 
     @staticmethod
@@ -357,69 +413,120 @@ class PointPickerDialog(QDialog):
             return str(first) == str(second)
 
     def _populate_font_combo(self) -> None:
+        """Заполняет список семействами; начертания живут в отдельном списке.
+
+        Подпись вида «Семейство (Стиль)» в узком поле обрезалась до
+        нечитаемого «Семейство ()», поэтому здесь остаются только имена
+        семейств, а текущее начертание показывает отдельный комбобокс.
+        """
+
         self.font_combo.blockSignals(True)
         self.font_combo.clear()
+        for family in sorted(self.fonts_data, key=str.casefold):
+            self.font_combo.addItem(family, family)
 
-        style_order = [
-            "Thin", "ExtraLight", "Light", "Regular", "Book", "Medium",
-            "SemiBold", "Bold", "ExtraBold", "Black",
-            "Thin Italic", "ExtraLight Italic", "Light Italic", "Italic",
-            "Medium Italic", "SemiBold Italic", "Bold Italic",
-            "ExtraBold Italic", "Black Italic",
-        ]
-        current_index = -1
-        found_current = False
-
+        # Восстанавливаем текущий шрифт: семейство + начертание.
+        current = -1
+        self.font_family = None
+        preferred_style = None
         if self.font_path and Path(self.font_path).is_file():
-            for family in sorted(self.fonts_data, key=str.casefold):
-                styles = self.fonts_data[family]
-                sorted_styles = sorted(
-                    styles,
-                    key=lambda value: (
-                        style_order.index(value) if value in style_order else len(style_order),
-                        value.casefold(),
-                    ),
-                )
-                for style in sorted_styles:
-                    path = styles[style]
-                    label = family if style == "Regular" else f"{family} ({style})"
-                    self.font_combo.addItem(label, path)
-                    if self._same_path(path, self.font_path):
-                        current_index = self.font_combo.count() - 1
-                        found_current = True
-
-            if not found_current:
+            match = self._find_family_style_by_path(self.font_path)
+            if match is not None:
+                family, style = match
+                current = self.font_combo.findText(family, Qt.MatchFixedString)
+                self.font_family = family
+                preferred_style = style
+            else:
                 self.font_combo.insertItem(
                     0,
                     f"Файл: {Path(self.font_path).name}",
-                    self.font_path,
+                    None,
                 )
-                current_index = 0
-        else:
-            for family in sorted(self.fonts_data, key=str.casefold):
-                styles = self.fonts_data[family]
-                sorted_styles = sorted(
-                    styles,
-                    key=lambda value: (
-                        style_order.index(value) if value in style_order else len(style_order),
-                        value.casefold(),
-                    ),
-                )
-                for style in sorted_styles:
-                    path = styles[style]
-                    label = family if style == "Regular" else f"{family} ({style})"
-                    self.font_combo.addItem(label, path)
-
-        if current_index < 0 and self.font_combo.count():
-            current_index = 0
-        self.font_combo.setCurrentIndex(current_index)
+                current = 0
+        if current < 0 and self.font_combo.count():
+            current = 0
+            if self.font_combo.itemData(current):
+                self.font_family = str(self.font_combo.itemData(current))
+        self.font_combo.setCurrentIndex(current)
+        self._populate_style_combo(self.font_family, preferred_style)
         self.font_combo.blockSignals(False)
+
+    def _find_family_style_by_path(self, path: str) -> tuple[str, str] | None:
+        """Ищет (семейство, начертание) по пути файла шрифта."""
+
+        for family in sorted(self.fonts_data, key=str.casefold):
+            for style, candidate in self.fonts_data[family].items():
+                if self._same_path(candidate, path):
+                    return family, style
+        return None
+
+    def _build_style_combo(self) -> QComboBox:
+        self.style_combo = QComboBox()
+        self.style_combo.setMaxVisibleItems(20)
+        self.style_combo.setSizeAdjustPolicy(
+            QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.style_combo.setMinimumContentsLength(6)
+        self.style_combo.setMinimumWidth(0)
+        self.style_combo.setEnabled(False)
+        self.style_combo.setToolTip("Начертание выбранного семейства")
+        self.style_combo.currentIndexChanged.connect(self._on_style_changed)
+        self.style_combo.setEnabled(
+            self.render_config is not None and getattr(self, "font_family", None) is not None
+        )
+        return self.style_combo
+
+    def _populate_style_combo(self, family: str | None, preferred: str | None = None) -> None:
+        """Обновляет список начертаний под выбранное семейство."""
+
+        self.style_combo.blockSignals(True)
+        self.style_combo.clear()
+        styles = self.fonts_data.get(family, {}) if family else {}
+        if styles:
+            ordered = ordered_style_names(styles)
+            for style in ordered:
+                self.style_combo.addItem(style, style)
+            match = preferred if preferred in styles else (
+                "Regular" if "Regular" in styles else ordered[0]
+            )
+            index = self.style_combo.findText(match, Qt.MatchFixedString)
+            self.style_combo.setCurrentIndex(max(0, index))
+            self.style_combo.setEnabled(self.render_config is not None)
+            self._selected_style = match
+        else:
+            self.style_combo.setEnabled(False)
+            self._selected_style = None
+        self.style_combo.blockSignals(False)
+
+    def _on_style_changed(self, index: int) -> None:
+        """Смена начертания: путь шрифта обновляется под выбранное семейство."""
+
+        if self._loading_font or index < 0 or not self.font_family:
+            return
+        style = self.style_combo.itemData(index)
+        if not style:
+            return
+        path = self.fonts_data.get(self.font_family, {}).get(str(style))
+        if not path:
+            return
+        self._selected_style = str(style)
+        self.font_path = str(path)
+        self.font_combo.setToolTip(
+            self.font_family
+            if style == "Regular"
+            else f"{self.font_family} ({style})"
+        )
+        self._refresh_render_config()
 
     def _build_font_combo(self) -> QWidget:
         wrapper = QWidget()
         layout = QHBoxLayout(wrapper)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
+
+        # Список начертаний создаётся до заполнения семейств: популяция
+        # сразу выбирает текущее начертание.
+        self._build_style_combo()
 
         self.font_combo = QComboBox()
         # Редактируемое поле: можно не только выбрать из списка, но и набрать
@@ -430,7 +537,7 @@ class PointPickerDialog(QDialog):
         self.font_combo.setSizeAdjustPolicy(
             QComboBox.AdjustToMinimumContentsLengthWithIcon
         )
-        self.font_combo.setMinimumContentsLength(8)
+        self.font_combo.setMinimumContentsLength(5)
         self.font_combo.setMinimumWidth(0)
         self.font_combo.setMaximumWidth(176)
         self.font_combo.setEnabled(self.render_config is not None)
@@ -454,7 +561,7 @@ class PointPickerDialog(QDialog):
         return wrapper
 
     def _install_font_completer(self) -> None:
-        labels = [self.font_combo.itemText(i) for i in range(self.font_combo.count())]
+        labels = sorted(self.fonts_data, key=str.casefold)
         completer = QCompleter(labels, self.font_combo)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
@@ -470,7 +577,7 @@ class PointPickerDialog(QDialog):
     def _apply_font_text(self, text: str) -> None:
         """Приводит набранный текст к реальному шрифту и обновляет предпросмотр.
 
-        Порядок: элемент списка → путь к файлу → семейство из скана шрифтов.
+        Порядок: семейство из списка → путь к файлу → семейство из скана.
         Если ничего не совпало, последний валидный шрифт не меняется.
         """
 
@@ -479,19 +586,13 @@ class PointPickerDialog(QDialog):
             return
 
         index = self.font_combo.findText(text, Qt.MatchFixedString)
-        if index >= 0:
-            path = self.font_combo.itemData(index)
-            if path:
-                self.font_path = str(path)
-                self.font_combo.setToolTip(text)
-                self._refresh_render_config()
+        if index >= 0 and self.font_combo.itemData(index):
+            self._select_family(str(self.font_combo.itemData(index)))
             return
 
         path = Path(text)
         if path.is_file() and path.suffix.lower() in {".ttf", ".otf", ".ttc"}:
-            self.font_path = str(path)
-            self.font_combo.setToolTip(f"Файл: {path.name}")
-            self._refresh_render_config()
+            self._select_file_font(str(path))
             return
 
         family = next(
@@ -500,10 +601,48 @@ class PointPickerDialog(QDialog):
         )
         if family is None:
             return
-        styles = self.fonts_data[family]
-        style = "Regular" if "Regular" in styles else next(iter(styles))
+        self._select_family(family)
+
+    def _select_family(self, family: str, preferred: str | None = None) -> None:
+        """Выбирает семейство и начертание; путь и предпросмотр обновляются."""
+
+        styles = self.fonts_data.get(family, {})
+        if not styles:
+            return
+        if preferred is None:
+            preferred = self._selected_style
+        self.font_family = family
+
+        self.font_combo.blockSignals(True)
+        index = self.font_combo.findText(family, Qt.MatchFixedString)
+        if index >= 0:
+            self.font_combo.setCurrentIndex(index)
+        self.font_combo.blockSignals(False)
+
+        self._populate_style_combo(family, preferred=preferred)
+        style = self._selected_style or "Regular"
         self.font_path = str(styles[style])
-        self.font_combo.setToolTip(family)
+        self.font_combo.setToolTip(
+            family if style == "Regular" else f"{family} ({style})"
+        )
+        self._refresh_render_config()
+
+    def _select_file_font(self, path: str) -> None:
+        """Выбирает файл шрифта вне скана системных семейств."""
+
+        self.font_family = None
+        self._selected_style = None
+        self.font_combo.blockSignals(True)
+        for i in range(self.font_combo.count()):
+            if self.font_combo.itemText(i).startswith("Файл:"):
+                self.font_combo.removeItem(i)
+                break
+        self.font_combo.insertItem(0, f"Файл: {Path(path).name}", None)
+        self.font_combo.setCurrentIndex(0)
+        self.font_combo.blockSignals(False)
+        self._populate_style_combo(None)
+        self.font_path = str(path)
+        self.font_combo.setToolTip(f"Файл: {Path(path).name}")
         self._refresh_render_config()
 
     def _normalize_font_text(self) -> None:
@@ -541,35 +680,23 @@ class PointPickerDialog(QDialog):
     def _on_font_changed(self, index: int) -> None:
         if self._loading_font or index < 0:
             return
-        path = self.font_combo.itemData(index)
-        if not path:
+        family = self.font_combo.itemData(index)
+        if not family:
             return
-        self.font_path = str(path)
-        self.font_combo.setToolTip(self.font_combo.currentText())
-        self._refresh_render_config()
+        self._select_family(str(family))
 
     def choose_font_file(self) -> None:
         if self.render_config is None:
             return
         path = get_open_file_name(
             self,
-            "Выберите файл шрифта",
+            tr("Выберите файл шрифта"),
             self.font_path or str(Path.home()),
-            "Шрифты (*.ttf *.otf *.ttc)",
+            tr("Шрифты (*.ttf *.otf *.ttc)"),
         )
         if not path:
             return
-
-        self.font_path = path
-        self._loading_font = True
-        for index in reversed(range(self.font_combo.count())):
-            if self.font_combo.itemText(index).startswith("Файл:"):
-                self.font_combo.removeItem(index)
-        self.font_combo.insertItem(0, f"Файл: {Path(path).name}", path)
-        self.font_combo.setCurrentIndex(0)
-        self._loading_font = False
-        self.font_combo.setToolTip(self.font_combo.currentText())
-        self._refresh_render_config()
+        self._select_file_font(path)
 
     def _build_font_size_spin(self) -> QSpinBox:
         self.font_size_spin = QSpinBox()
@@ -589,26 +716,21 @@ class PointPickerDialog(QDialog):
         self.letter_spacing_spin.valueChanged.connect(self._on_letter_spacing_changed)
         return self.letter_spacing_spin
 
-    def _build_color_row(self) -> QWidget:
-        row = QWidget()
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+    def _build_color_row(self) -> ColorField:
+        """Ряд «Цвет» в стиле Figma: плашка и hex в одной строке-инпуте."""
 
-        self.color_button = QPushButton()
-        self.color_button.setObjectName("color_swatch")
-        self.color_button.setFixedSize(34, 34)
-        self.color_button.setToolTip("Выбрать цвет текста")
-        self.color_button.setEnabled(self.render_config is not None)
-        self.color_button.clicked.connect(self.choose_color)
-        layout.addWidget(self.color_button)
+        self.text_color_field = ColorField(
+            self.text_color,
+            title="Выбрать цвет текста",
+        )
+        self.text_color_field.setEnabled(self.render_config is not None)
+        self.text_color_field.changed.connect(self._on_text_color_changed)
+        self.text_color_field.match_height(self.font_size_spin)
+        return self.text_color_field
 
-        self.color_label = QLabel()
-        self.color_label.setObjectName("secondary_label")
-        layout.addWidget(self.color_label)
-        layout.addStretch()
-        self._set_color_button(self.text_color)
-        return row
+    def _on_text_color_changed(self, rgba) -> None:
+        self.text_color = clamp_rgba(rgba)
+        self._refresh_render_config()
 
     def _build_auto_row(self) -> QWidget:
         row = QWidget()
@@ -638,53 +760,97 @@ class PointPickerDialog(QDialog):
             self.marker_y = self.img_height // 2
         return row
 
-    def _build_marker_color_row(self) -> QWidget:
+    def _build_coord_row(self) -> QWidget:
+        """Точные координаты крестика: ввод вручную двигает метку."""
+
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        self.coord_x_spin = QSpinBox()
+        self.coord_x_spin.setRange(0, max(0, self.img_width - 1))
+        self.coord_x_spin.setValue(self.marker_x)
+        self.coord_x_spin.setFixedWidth(96)
+        self.coord_x_spin.setToolTip(
+            "Крестик по X: левый/правый край блока или его центр "
+            "в зависимости от выравнивания"
+        )
+        self.coord_x_spin.valueChanged.connect(self._on_coord_x_changed)
+        layout.addWidget(QLabel("X:"))
+        layout.addWidget(self.coord_x_spin)
+
+        self.coord_y_spin = QSpinBox()
+        self.coord_y_spin.setRange(0, max(0, self.img_height - 1))
+        self.coord_y_spin.setValue(self.marker_y)
+        self.coord_y_spin.setFixedWidth(96)
+        self.coord_y_spin.setToolTip(
+            "Крестик по Y: вертикальный центр текстового блока"
+        )
+        self.coord_y_spin.valueChanged.connect(self._on_coord_y_changed)
+        layout.addWidget(QLabel("Y:"))
+        layout.addWidget(self.coord_y_spin)
+        layout.addStretch()
+        return row
+
+    def _on_coord_x_changed(self, value: int) -> None:
+        if getattr(self, "_loading_coords", False):
+            return
+        self.auto_x_check.setChecked(False)
+        self.marker_x = value
+        self.point_changed = True
+        self.draw_marker()
+
+    def _on_coord_y_changed(self, value: int) -> None:
+        if getattr(self, "_loading_coords", False):
+            return
+        self.auto_y_check.setChecked(False)
+        self.marker_y = value
+        self.point_changed = True
+        self.draw_marker()
+
+    def _build_marker_color_row(self) -> ColorField:
         return self._build_color_control(
             self.marker_color,
-            self.choose_marker_color,
-            "marker_color_button",
-            "marker_color_label",
+            "marker_color_field",
             "Выбрать цвет крестика",
+            self._on_marker_color_changed,
         )
 
-    def _build_safe_color_row(self) -> QWidget:
+    def _build_safe_color_row(self) -> ColorField:
         return self._build_color_control(
             self.safe_area_color,
-            self.choose_safe_area_color,
-            "safe_color_button",
-            "safe_color_label",
+            "safe_color_field",
             "Выбрать цвет линии полей для печати",
+            self._on_safe_color_changed,
         )
 
     def _build_color_control(
         self,
-        color: tuple[int, int, int],
-        callback,
-        button_name: str,
-        label_name: str,
-        tooltip: str,
-    ) -> QWidget:
-        row = QWidget()
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        color,
+        attr_name: str,
+        title: str,
+        on_change,
+    ) -> ColorField:
+        field = ColorField(color, title=title)
+        field.changed.connect(on_change)
+        # Высота по соседнему ряду «Поля»: все ряды инспектора одинаковые.
+        reference = getattr(self, "margin_spin", None) or getattr(
+            self, "font_size_spin", None
+        )
+        if reference is not None:
+            field.match_height(reference)
+        setattr(self, attr_name, field)
+        return field
 
-        button = QPushButton()
-        button.setObjectName("color_swatch")
-        button.setFixedSize(30, 30)
-        button.setToolTip(tooltip)
-        button.clicked.connect(callback)
-        layout.addWidget(button)
+    def _on_marker_color_changed(self, rgba) -> None:
+        self.marker_color = clamp_rgba(rgba)
+        self.marker_pen.setColor(QColor(*self.marker_color))
+        self.draw_marker()
 
-        label = QLabel()
-        label.setObjectName("secondary_label")
-        layout.addWidget(label)
-        layout.addStretch()
-
-        setattr(self, button_name, button)
-        setattr(self, label_name, label)
-        self._set_color_control(button, label, color)
-        return row
+    def _on_safe_color_changed(self, rgba) -> None:
+        self.safe_area_color = clamp_rgba(rgba)
+        self._rebuild_safe_area()
 
     def _build_align_segments(self) -> QWidget:
         wrapper = QFrame()
@@ -817,62 +983,13 @@ class PointPickerDialog(QDialog):
         self._refresh_render_config()
         self.draw_marker()
 
-    def _set_color_button(self, color: tuple[int, int, int]) -> None:
-        value = QColor(*color).name()
-        self.color_button.setStyleSheet(f"background-color: {value};")
-        self.color_label.setText(value.upper())
-
-    @staticmethod
-    def _set_color_control(button: QPushButton, label: QLabel, color) -> None:
-        value = QColor(*color).name()
-        button.setStyleSheet(f"background-color: {value};")
-        label.setText(value.upper())
-
-    def _pick_color(self, current, title: str) -> tuple[int, int, int] | None:
-        return get_color(self, title, current)
-
-    def choose_marker_color(self) -> None:
-        selected = self._pick_color(self.marker_color, "Цвет крестика")
-        if selected is None:
-            return
-        self.marker_color = selected
-        self._set_color_control(
-            self.marker_color_button,
-            self.marker_color_label,
-            self.marker_color,
-        )
-        self.marker_pen.setColor(QColor(*self.marker_color))
-        self.draw_marker()
-
-    def choose_safe_area_color(self) -> None:
-        selected = self._pick_color(self.safe_area_color, "Цвет полей для печати")
-        if selected is None:
-            return
-        self.safe_area_color = selected
-        self._set_color_control(
-            self.safe_color_button,
-            self.safe_color_label,
-            self.safe_area_color,
-        )
-        self._rebuild_safe_area()
-
-    def choose_color(self) -> None:
-        if self.render_config is None:
-            return
-        selected = self._pick_color(self.text_color, "Цвет текста")
-        if selected is None:
-            return
-        self.text_color = selected
-        self._set_color_button(self.text_color)
-        self._refresh_render_config()
-
     def reset_style(self) -> None:
         if self.render_config is None:
             return
         self.font_size_spin.setValue(100)
         self.letter_spacing_spin.setValue(0)
-        self.text_color = (0, 0, 0)
-        self._set_color_button(self.text_color)
+        self.text_color = (0, 0, 0, 255)
+        self.text_color_field.set_rgba(self.text_color)
         self.margin_spin.setValue(36)
         self._refresh_render_config()
 
@@ -892,8 +1009,8 @@ class PointPickerDialog(QDialog):
             self.safe_check.isChecked() and self.safe_margin > 0,
         )
 
-    def get_text_color(self) -> tuple[int, int, int]:
-        return tuple(self.text_color)
+    def get_text_color(self) -> tuple[int, int, int, int]:
+        return tuple(self.text_color)  # type: ignore[return-value]
 
     def get_font_path(self) -> str:
         return self.font_path
@@ -917,10 +1034,10 @@ class PointPickerDialog(QDialog):
 
     def _align_hint(self) -> str:
         if self.align == "left":
-            return "Правый клик: поставить точку (левый край блока)"
+            return tr("ПКМ: поставить крестик (левый край, середина по высоте)")
         if self.align == "right":
-            return "Правый клик: поставить точку (правый край блока)"
-        return "Правый клик: поставить точку (центр блока)"
+            return tr("ПКМ: поставить крестик (правый край, середина по высоте)")
+        return tr("ПКМ: поставить крестик (центр по горизонтали и вертикали)")
 
     def on_align_changed(self, align: str | None = None) -> None:
         if align is None:
@@ -964,11 +1081,11 @@ class PointPickerDialog(QDialog):
     def get_auto_y(self) -> bool:
         return self.auto_y_check.isChecked()
 
-    def get_safe_area_color(self) -> tuple[int, int, int]:
-        return tuple(self.safe_area_color)
+    def get_safe_area_color(self) -> tuple[int, int, int, int]:
+        return tuple(self.safe_area_color)  # type: ignore[return-value]
 
-    def get_marker_color(self) -> tuple[int, int, int]:
-        return tuple(self.marker_color)
+    def get_marker_color(self) -> tuple[int, int, int, int]:
+        return tuple(self.marker_color)  # type: ignore[return-value]
 
     def _clamp_marker(self):
         self.marker_x = max(0, min(self.img_width - 1, int(self.marker_x)))
@@ -1146,12 +1263,23 @@ class PointPickerDialog(QDialog):
         self.scene.addItem(dot)
         self.marker_lines.append(dot)
 
-        label = {
-            "left": "Левый край",
-            "right": "Правый край",
-            "center": "Центр текста",
-        }.get(self.align, "Точка")
-        self.info_label.setText(f"{label}: X={self.marker_x}, Y={self.marker_y}")
+        template = {
+            "left": "Левый край: X={x}, Y={y}",
+            "right": "Правый край: X={x}, Y={y}",
+            "center": "Центр текста: X={x}, Y={y}",
+        }.get(self.align, "Точка: X={x}, Y={y}")
+        self.info_label.setText(
+            tr(template).format(x=self.marker_x, y=self.marker_y)
+        )
+        # Точные координаты синхронизируются с крестиком в обе стороны.
+        self._loading_coords = True
+        try:
+            if getattr(self, "coord_x_spin", None) is not None:
+                self.coord_x_spin.setValue(self.marker_x)
+            if getattr(self, "coord_y_spin", None) is not None:
+                self.coord_y_spin.setValue(self.marker_y)
+        finally:
+            self._loading_coords = False
         self._schedule_preview()
 
     def on_mouse_press(self, event):
@@ -1168,14 +1296,28 @@ class PointPickerDialog(QDialog):
             QGraphicsView.mousePressEvent(self.view, event)
 
     def on_mouse_move(self, event):
+        # Протяжка ПКМ: крестик едет за курсором, пока кнопка удерживается.
+        if event.buttons() & Qt.RightButton:
+            scene_pos = self.view.mapToScene(event.position().toPoint())
+            self.marker_x = int(scene_pos.x())
+            self.marker_y = int(scene_pos.y())
+            self.point_changed = True
+            self.draw_marker()
+            event.accept()
+            return
         if event.modifiers() & Qt.AltModifier:
             scene_pos = self.view.mapToScene(event.position().toPoint())
             dx = scene_pos.x() - self.marker_x
             dy = scene_pos.y() - self.marker_y
             dist = (dx**2 + dy**2) ** 0.5
             self.info_label.setText(
-                f"X={self.marker_x}, Y={self.marker_y} | "
-                f"ΔX={int(dx)} ΔY={int(dy)} | Дистанция: {int(dist)} px"
+                tr("X={x}, Y={y} | ΔX={dx} ΔY={dy} | Дистанция: {dist} px").format(
+                    x=self.marker_x,
+                    y=self.marker_y,
+                    dx=int(dx),
+                    dy=int(dy),
+                    dist=int(dist),
+                )
             )
         QGraphicsView.mouseMoveEvent(self.view, event)
 

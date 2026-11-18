@@ -15,27 +15,29 @@ class SettingsTests(unittest.TestCase):
             source = AppSettings(
                 template_path="C:/tmp/template.png",
                 font_size=72,
-                text_color=(12, 34, 56),
-                safe_area_color=(1, 2, 3),
-                marker_color=(4, 5, 6),
+                text_color=(12, 34, 56, 128),
+                safe_area_color=(1, 2, 3, 255),
+                marker_color=(4, 5, 6, 64),
                 x_auto=False,
                 x=321,
                 name_mode="auto",
                 output_format="png",
                 theme="light",
+                language="en",
                 window_geometry="abc",
             )
             store.save(source)
             loaded = store.load()
             self.assertEqual(loaded.template_path, source.template_path)
             self.assertEqual(loaded.font_size, 72)
-            self.assertEqual(loaded.text_color, (12, 34, 56))
-            self.assertEqual(loaded.safe_area_color, (1, 2, 3))
-            self.assertEqual(loaded.marker_color, (4, 5, 6))
+            self.assertEqual(loaded.text_color, (12, 34, 56, 128))
+            self.assertEqual(loaded.safe_area_color, (1, 2, 3, 255))
+            self.assertEqual(loaded.marker_color, (4, 5, 6, 64))
             self.assertFalse(loaded.x_auto)
             self.assertEqual(loaded.x, 321)
             self.assertEqual(loaded.name_mode, "auto")
             self.assertEqual(loaded.theme, "light")
+            self.assertEqual(loaded.language, "en")
 
     def test_normalize_old_and_invalid_values(self):
         settings = normalize_settings(
@@ -56,9 +58,9 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.line_spacing, 1000)
         self.assertEqual(settings.output_format, "pdf")
         self.assertEqual(settings.theme, "dark")
-        self.assertEqual(settings.text_color, (17, 34, 51))
-        self.assertEqual(settings.safe_area_color, (170, 187, 204))
-        self.assertEqual(settings.marker_color, (1, 2, 3))
+        self.assertEqual(settings.text_color, (17, 34, 51, 255))
+        self.assertEqual(settings.safe_area_color, (170, 187, 204, 255))
+        self.assertEqual(settings.marker_color, (1, 2, 3, 255))
         self.assertEqual(settings.splitter_sizes, [10])
 
     def test_normalize_arbitrary_invalid_types(self):
@@ -95,7 +97,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.line_spacing, 0)
         self.assertEqual(settings.margin, 36)
         self.assertEqual(settings.split_after, 1)
-        self.assertEqual(settings.text_color, (0, 0, 0))
+        self.assertEqual(settings.text_color, (0, 0, 0, 255))
         self.assertEqual(settings.align, "left")
         self.assertEqual(settings.name_mode, "single_line")
         self.assertEqual(settings.output_format, "pdf")
@@ -108,6 +110,18 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(settings.y_auto)
         self.assertFalse(settings.preview)
         self.assertEqual(settings.splitter_sizes, [1, 3])
+
+    def test_alpha_and_language_are_normalized(self):
+        settings = normalize_settings(
+            {
+                "text_color": "#11223344",
+                "safe_area_color": [10, 20, 30, 40],
+                "language": "de",
+            }
+        )
+        self.assertEqual(settings.text_color, (17, 34, 51, 68))
+        self.assertEqual(settings.safe_area_color, (10, 20, 30, 40))
+        self.assertEqual(settings.language, "ru")
 
     def test_corrupt_file_is_backed_up(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import suppress
 from pathlib import Path
 
 from PIL import ImageFont
-from PySide6.QtCore import QByteArray, QEvent, QStandardPaths, Qt, QThread, QTimer, QUrl
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QKeySequence, QShortcut
+from PySide6.QtCore import (
+    QByteArray,
+    QEvent,
+    QProcess,
+    QProcessEnvironment,
+    QStandardPaths,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+)
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -33,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.font_utils import resolve_font_path, scan_fonts
+from core.font_utils import ordered_style_names, resolve_font_path, scan_fonts
 from core.generator import (
     GenerationJob,
     OutputConfig,
@@ -41,6 +52,7 @@ from core.generator import (
     load_template,
     render_page,
 )
+from core.i18n import LANGUAGES, is_english, language, tr, translate_widget_tree
 from core.name_format import format_name_lines, plural, resolve_auto_lines
 from core.paths import (
     cleanup_manifest,
@@ -56,6 +68,8 @@ from core.text_render import check_text_bounds
 from core.version import __version__
 from core.windows_utils import is_windows_theme
 from ui.collapsible import CollapsibleSection
+from ui.color_field import ColorField, clamp_rgba
+from ui.color_picker import color_format, set_color_format
 from ui.message_dialog import MessageDialog
 from ui.name_list import NameListEditor
 from ui.point_picker import PointPickerDialog
@@ -63,7 +77,6 @@ from ui.preview_pane import PreviewPane
 from ui.themed_dialogs import (
     apply_theme_tree,
     apply_title_bar,
-    get_color,
     get_existing_directory,
     get_open_file_name,
     style_popup,
@@ -109,6 +122,7 @@ class DiplomaGenerator(QMainWindow):
 
         self.create_ui()
         self.apply_settings(settings)
+        translate_widget_tree(self)
         self._connect_preview_signals()
         self._apply_theme(self.current_theme)
         self._update_generate_button()
@@ -309,12 +323,21 @@ class DiplomaGenerator(QMainWindow):
         self.font_edit.editingFinished.connect(self.normalize_font_input)
         font_label = QLabel("Шрифт:")
         grid.addWidget(font_label, 1, 0)
-        grid.addWidget(self.font_edit, 1, 1)
+
+        # Поле и список начертаний в одном контейнере: когда начертание одно
+        # и список скрыт, поле дотягивается до «Обзор» наравне с шаблоном.
+        font_row = QWidget()
+        font_row_layout = QHBoxLayout(font_row)
+        font_row_layout.setContentsMargins(0, 0, 0, 0)
+        font_row_layout.setSpacing(10)
+        font_row_layout.addWidget(self.font_edit, 1)
 
         self.style_combo = QComboBox()
-        self.style_combo.setFixedWidth(120)
+        # 150 px: длинные начертания вроде «ExtraLight Italic» влезают целиком.
+        self.style_combo.setFixedWidth(150)
         self.style_combo.currentTextChanged.connect(self._on_style_changed)
-        grid.addWidget(self.style_combo, 1, 2)
+        font_row_layout.addWidget(self.style_combo)
+        grid.addWidget(font_row, 1, 1, 1, 2)
 
         btn_font_file = QPushButton("Обзор")
         btn_font_file.setObjectName("link_btn")
@@ -330,7 +353,7 @@ class DiplomaGenerator(QMainWindow):
         style_row = QWidget()
         style_layout = QHBoxLayout(style_row)
         style_layout.setContentsMargins(0, 0, 0, 0)
-        style_layout.setSpacing(12)
+        style_layout.setSpacing(10)
         size_label = QLabel("Размер:")
         label_width = max(
             template_label.sizeHint().width(),
@@ -348,12 +371,16 @@ class DiplomaGenerator(QMainWindow):
 
         style_layout.addSpacing(10)
         color_label = QLabel("Цвет:")
+        color_label.setFixedWidth(label_width)
         style_layout.addWidget(color_label)
-        self.color_preview = QPushButton()
-        self.color_preview.setObjectName("color_swatch")
-        self.color_preview.setFixedSize(34, 34)
-        self.color_preview.setToolTip("Выбрать цвет текста")
-        self.color_preview.clicked.connect(self.choose_color)
+        # Ряд цвета по рефу Figma: второй в строке, высота - как у соседей.
+        self.color_preview = ColorField(
+            tuple(self.text_color),
+            title="Выбрать цвет текста",
+        )
+        self.color_preview.setFixedWidth(200)
+        self.color_preview.match_height(self.font_size_spin)
+        self.color_preview.changed.connect(self._on_text_color_changed)
         self._set_color_preview(self.text_color)
         style_layout.addWidget(self.color_preview)
 
@@ -657,6 +684,19 @@ class DiplomaGenerator(QMainWindow):
             button.toggled.connect(self.change_theme)
         layout.addWidget(theme_group)
 
+        language_group = QGroupBox("Язык интерфейса")
+        language_layout = QHBoxLayout(language_group)
+        language_layout.setSpacing(10)
+        self.language_combo = QComboBox()
+        for code, label in LANGUAGES.items():
+            self.language_combo.addItem(label, code)
+        current = language()
+        index = self.language_combo.findData(current)
+        self.language_combo.setCurrentIndex(max(0, index))
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        language_layout.addWidget(self.language_combo, 1)
+        layout.addWidget(language_group)
+
         about_group = QGroupBox("О программе")
         about_layout = QVBoxLayout(about_group)
         about_layout.setSpacing(10)
@@ -687,6 +727,14 @@ class DiplomaGenerator(QMainWindow):
         save_btn.setObjectName("link_btn")
         save_btn.clicked.connect(self.save_settings)
         path_layout.addWidget(save_btn)
+        reset_btn = QPushButton("Сбросить настройки")
+        reset_btn.setObjectName("secondary_btn")
+        reset_btn.setToolTip(
+            "Вернуть все настройки к значениям по умолчанию. "
+            "Язык интерфейса и положение окна останутся прежними."
+        )
+        reset_btn.clicked.connect(self.reset_settings)
+        path_layout.addWidget(reset_btn)
         layout.addWidget(path_group)
         layout.addStretch()
 
@@ -702,6 +750,8 @@ class DiplomaGenerator(QMainWindow):
 
     def apply_settings(self, settings: AppSettings) -> None:
         self._loading_settings = True
+        # Формат ввода цвета: пикер и все поля перестраиваются под него.
+        set_color_format(settings.color_input_format)
         try:
             self.template_path = settings.template_path
             self._set_path_text(self.template_edit, settings.template_path)
@@ -777,6 +827,11 @@ class DiplomaGenerator(QMainWindow):
             theme_button.setChecked(True)
             self.current_theme = self._resolve_theme(settings.theme)
 
+            self.language_combo.blockSignals(True)
+            language_index = self.language_combo.findData(settings.language)
+            self.language_combo.setCurrentIndex(max(0, language_index))
+            self.language_combo.blockSignals(False)
+
             if settings.window_geometry:
                 geometry = QByteArray.fromBase64(settings.window_geometry.encode("ascii"))
                 if not geometry.isEmpty():
@@ -791,12 +846,17 @@ class DiplomaGenerator(QMainWindow):
             self._update_generate_button()
         finally:
             self._loading_settings = False
+        # После применения считаем интерфейс соответствующим сохранённому
+        # состоянию: закрытие без изменений не должно ничего спрашивать.
+        self._refresh_saved_snapshot()
 
-    def save_settings(self, *, silent: bool = False) -> bool:
+    def _collect_settings(self) -> AppSettings:
+        """Собирает AppSettings из текущего состояния интерфейса."""
+
         def geometry_text(obj) -> str:
             return bytes(obj.saveGeometry().toBase64()).decode("ascii")
 
-        settings = AppSettings(
+        return AppSettings(
             template_path=self.template_path,
             font_path=self.font_path,
             selected_font_family=self.selected_font_family,
@@ -825,20 +885,109 @@ class DiplomaGenerator(QMainWindow):
             preview_mode=self.get_preview_mode(),
             preview_custom=self.preview_custom_edit.text().strip(),
             theme=self.get_theme_choice(),
+            language=str(self.language_combo.currentData() or language()),
+            color_input_format=color_format(),
             ask_before_move=self.ask_before_move.isChecked(),
             cleanup_previous=self.cleanup_previous_check.isChecked(),
             window_geometry=geometry_text(self),
             splitter_sizes=self.names_splitter.sizes(),
             main_splitter_sizes=self.main_splitter.sizes(),
         )
+
+    @staticmethod
+    def _snapshot_key(settings: AppSettings) -> tuple:
+        """Отпечаток значимых настроек: геометрия окна и сплиттеры не в счёт,
+        чтобы обычное перемещение окна не считалось «изменением настроек»."""
+
+        data = settings.to_dict()
+        # color_input_format тоже исключён: пикер сохраняет его в файл сразу,
+        # и смена формата не должна выглядеть как «изменённые настройки».
+        for ignored in (
+            "window_geometry",
+            "splitter_sizes",
+            "main_splitter_sizes",
+            "color_input_format",
+        ):
+            data.pop(ignored, None)
+        return tuple(sorted(data.items(), key=lambda item: str(item[0])))
+
+    def _refresh_saved_snapshot(self) -> None:
+        self._saved_snapshot = self._snapshot_key(self._collect_settings())
+
+    def save_settings(self, *, silent: bool = False) -> bool:
+        settings = self._collect_settings()
         try:
             self.settings_store.save(settings)
+            self._refresh_saved_snapshot()
             if not silent:
-                self.status_label.setText("Настройки сохранены")
+                self.status_label.setText(tr("Настройки сохранены"))
             return True
         except OSError as exc:
             self._message("Ошибка сохранения", str(exc), [("ОК", "primary")])
             return False
+
+    def reset_settings(self) -> None:
+        """Возвращает настройки к значениям по умолчанию.
+
+        Язык интерфейса и геометрия окна не сбрасываются: они к содержимому
+        работы отношения не имеют.
+        """
+
+        answer = self._message(
+            "Сброс настроек",
+            "Вернуть все настройки к значениям по умолчанию?",
+            [("Сбросить", "primary"), ("Отмена", "")],
+            default_btn=1,
+        )
+        if answer != 0:
+            return
+        current = self._collect_settings()
+        defaults = AppSettings()
+        defaults.window_geometry = current.window_geometry
+        defaults.main_splitter_sizes = current.main_splitter_sizes
+        defaults.splitter_sizes = current.splitter_sizes
+        defaults.language = current.language
+        try:
+            self.settings_store.save(defaults)
+        except OSError as exc:
+            self._message("Ошибка сохранения", str(exc), [("ОК", "primary")])
+            return
+        self.apply_settings(defaults)
+        self.status_label.setText(tr("Настройки сброшены"))
+
+    def _on_language_changed(self, _index: int) -> None:
+        selected = str(self.language_combo.currentData() or "ru")
+        if selected == language():
+            return
+        answer = self._message(
+            tr("Смена языка"),
+            tr("Чтобы применить язык, приложение нужно перезапустить."),
+            [(tr("Перезапустить сейчас"), "primary"), (tr("Позже"), "")],
+        )
+        if answer != 0:
+            self.language_combo.blockSignals(True)
+            index = self.language_combo.findData(language())
+            self.language_combo.setCurrentIndex(max(0, index))
+            self.language_combo.blockSignals(False)
+            return
+        if self.save_settings(silent=True):
+            self._restart_app()
+
+    def _restart_app(self) -> None:
+        if getattr(sys, "frozen", False):
+            arguments = sys.argv[1:]
+        else:
+            arguments = [str(Path(sys.argv[0]).resolve()), *sys.argv[1:]]
+        process = QProcess()
+        environment = QProcessEnvironment.systemEnvironment()
+        # Новый процесс задерживает показ окна: старый должен успеть
+        # закрыться, чтобы окна не мелькали и не конфликтовали.
+        environment.insert("AUTOFILL_RESTART_DELAY_MS", "900")
+        process.setProcessEnvironment(environment)
+        process.setProgram(sys.executable)
+        process.setArguments(arguments)
+        process.startDetached()
+        QApplication.quit()
 
     def closeEvent(self, event) -> None:
         if self._thread is not None and self._thread.isRunning():
@@ -867,9 +1016,16 @@ class DiplomaGenerator(QMainWindow):
             self._worker = None
             self._set_generating(False)
 
+        # Если пользователь ничего не менял — сохраняем молча и выходим без
+        # лишних вопросов.  Геометрия окна не считается изменением.
+        if self._snapshot_key(self._collect_settings()) == self._saved_snapshot:
+            self.save_settings(silent=True)
+            event.accept()
+            return
+
         answer = self._message(
             "Выход",
-            "Сохранить настройки перед выходом?",
+            "Настройки изменились. Сохранить их перед выходом?",
             [("Сохранить", "primary"), ("Не сохранять", ""), ("Отмена", "")],
             default_btn=0,
         )
@@ -939,9 +1095,9 @@ class DiplomaGenerator(QMainWindow):
     def choose_template(self) -> None:
         path = get_open_file_name(
             self,
-            "Выберите шаблон грамоты",
+            tr("Выберите шаблон грамоты"),
             self.template_path or str(Path.home()),
-            "Изображения (*.jpg *.jpeg *.png)",
+            tr("Изображения (*.jpg *.jpeg *.png)"),
         )
         if path:
             self._set_path_text(self.template_edit, path)
@@ -954,9 +1110,9 @@ class DiplomaGenerator(QMainWindow):
     def choose_font_file(self) -> None:
         path = get_open_file_name(
             self,
-            "Выберите файл шрифта",
+            tr("Выберите файл шрифта"),
             self.font_path or str(Path.home()),
-            "Шрифты (*.ttf *.otf *.ttc)",
+            tr("Шрифты (*.ttf *.otf *.ttc)"),
         )
         if path:
             self.font_path = path
@@ -968,16 +1124,13 @@ class DiplomaGenerator(QMainWindow):
             self.style_combo.setVisible(False)
             self._schedule_preview()
 
-    def _set_color_preview(self, color: tuple[int, int, int]) -> None:
-        value = QColor(*color).name()
-        self.color_preview.setStyleSheet(f"background-color: {value};")
+    def _set_color_preview(self, color: tuple[int, int, int, int]) -> None:
+        self.color_preview.set_rgba(color)
 
-    def choose_color(self) -> None:
-        color = get_color(self, "Цвет текста", self.text_color)
-        if color is not None:
-            self.text_color = color
-            self._set_color_preview(self.text_color)
-            self._schedule_preview()
+    def _on_text_color_changed(self, color) -> None:
+        self.text_color = clamp_rgba(color)
+        self.color_preview.set_rgba(self.text_color)
+        self._schedule_preview()
 
     def _on_font_text_changed(self, text: str) -> None:
         if self._loading_settings:
@@ -1055,16 +1208,7 @@ class DiplomaGenerator(QMainWindow):
             return
         self.selected_font_family = family
         self.font_path = ""
-        style_order = [
-            "Thin", "ExtraLight", "Light", "Regular", "Medium",
-            "SemiBold", "Bold", "ExtraBold", "Black",
-            "Thin Italic", "ExtraLight Italic", "Light Italic", "Italic",
-            "Medium Italic", "SemiBold Italic", "Bold Italic", "ExtraBold Italic", "Black Italic",
-        ]
-        sorted_styles = sorted(
-            styles,
-            key=lambda value: (style_order.index(value) if value in style_order else len(style_order), value.casefold()),
-        )
+        sorted_styles = ordered_style_names(styles)
         self.style_combo.blockSignals(True)
         self.style_combo.clear()
         self.style_combo.addItems(sorted_styles)
@@ -1103,7 +1247,9 @@ class DiplomaGenerator(QMainWindow):
             self.selected_font_style = "Regular"
             self.style_combo.clear()
             self.style_combo.setVisible(False)
-            self.status_label.setText(f"Шрифт «{text}» не найден")
+            self.status_label.setText(
+                tr("Шрифт «{name}» не найден").format(name=text)
+            )
             self._schedule_preview()
 
     def _on_auto_toggled(self, _checked: bool = False) -> None:
@@ -1165,7 +1311,7 @@ class DiplomaGenerator(QMainWindow):
     def choose_output_dir(self) -> None:
         path = get_existing_directory(
             self,
-            "Выберите папку для сохранения",
+            tr("Выберите папку для сохранения"),
             self.output_dir_edit.text() or self._default_output_dir(),
         )
         if path:
@@ -1301,11 +1447,20 @@ class DiplomaGenerator(QMainWindow):
         count = self.names_editor.count()
         generating = self._is_generating()
         if count:
-            self.generate_btn.setText(f"Сгенерировать {count} {plural(count, ('грамоту', 'грамоты', 'грамот'))}")
+            if is_english():
+                label = tr("Сгенерировать {count} грамот").format(count=count)
+            else:
+                label = (
+                    f"Сгенерировать {count} "
+                    f"{plural(count, ('грамоту', 'грамоты', 'грамот'))}"
+                )
+            self.generate_btn.setText(label)
         else:
-            self.generate_btn.setText("Сгенерировать грамоты")
+            self.generate_btn.setText(tr("Сгенерировать грамоты"))
         self.generate_btn.setEnabled(count > 0 and not generating)
-        self.generate_btn.setToolTip("" if count else "Добавьте хотя бы одно ФИО")
+        self.generate_btn.setToolTip(
+            "" if count else tr("Добавьте хотя бы одно ФИО")
+        )
         if hasattr(self, "action_generate"):
             self.action_generate.setEnabled(count > 0 and not generating)
         self.preview_pane.open_button.setEnabled(count > 0 and not generating)
@@ -1338,12 +1493,12 @@ class DiplomaGenerator(QMainWindow):
         if self._is_generating():
             return
         if not self.template_path or not Path(self.template_path).is_file():
-            self.preview_pane.set_message("Выберите шаблон грамоты")
+            self.preview_pane.set_message(tr("Выберите шаблон грамоты"))
             return
         try:
             self.get_font_path()
         except ValueError:
-            self.preview_pane.set_message("Выберите шрифт")
+            self.preview_pane.set_message(tr("Выберите шрифт"))
             return
         try:
             image = self._make_preview_image(allow_empty=True)
@@ -1360,7 +1515,7 @@ class DiplomaGenerator(QMainWindow):
             self._message("Ошибка предпросмотра", str(exc), [("ОК", "primary")])
             return False
         self.preview_image = image
-        self.status_label.setText("Предпросмотр создан")
+        self.status_label.setText(tr("Предпросмотр создан"))
         return True
 
     def _open_editor(self, people=None, *, ok_text: str = "Применить") -> int:
@@ -1475,9 +1630,9 @@ class DiplomaGenerator(QMainWindow):
     def load_names_file(self) -> None:
         path = get_open_file_name(
             self,
-            "Выберите файл со списком",
+            tr("Выберите файл со списком"),
             str(Path.home()),
-            "Текст (*.txt *.csv);;Все файлы (*)",
+            tr("Текст (*.txt *.csv);;Все файлы (*)"),
         )
         if not path:
             return
@@ -1505,7 +1660,9 @@ class DiplomaGenerator(QMainWindow):
         else:
             self.names_editor.set_text(new_content)
         self.names_editor.search_edit.clear()
-        self.status_label.setText(f"Загружен список: {Path(path).name}")
+        self.status_label.setText(
+            tr("Загружен список: {name}").format(name=Path(path).name)
+        )
 
     def move_excluded_to_main(self) -> None:
         excluded = self.excluded_editor.people()
@@ -1529,12 +1686,14 @@ class DiplomaGenerator(QMainWindow):
                 if missing:
                     self.names_editor.append("\n".join(" ".join(parts) for parts in missing))
                 self.excluded_editor.clear()
-                self.status_label.setText("Исключения перенесены")
+                self.status_label.setText(tr("Исключения перенесены"))
                 return
             if answer == 1:
                 self.names_editor.set_text("\n".join(" ".join(parts) for parts in excluded))
                 self.excluded_editor.clear()
-                self.status_label.setText("Основной список заменён исключениями")
+                self.status_label.setText(
+                    tr("Основной список заменён исключениями")
+                )
                 return
             return
 
@@ -1646,10 +1805,14 @@ class DiplomaGenerator(QMainWindow):
                 unique.append(parts)
 
         if duplicates:
-            message = f"Найдены дубликаты ({len(duplicates)}):\n\n"
+            message = tr("Найдены дубликаты ({count}):\n\n").format(
+                count=len(duplicates)
+            )
             message += "\n".join(f"• {' '.join(parts)}" for parts in duplicates[:12])
             if len(duplicates) > 12:
-                message += f"\n…и ещё {len(duplicates) - 12}"
+                message += "\n" + tr("…и ещё {count}").format(
+                    count=len(duplicates) - 12
+                )
             answer = self._message(
                 "Дубликаты в списке",
                 message,
@@ -1659,7 +1822,7 @@ class DiplomaGenerator(QMainWindow):
                 people = unique
                 self.names_editor.set_text("\n".join(" ".join(parts) for parts in people))
             elif answer != 0:
-                self.status_label.setText("Отменено пользователем")
+                self.status_label.setText(tr("Отменено пользователем"))
                 return
 
         try:
@@ -1672,15 +1835,23 @@ class DiplomaGenerator(QMainWindow):
 
         generated_people = people
         if problematic:
-            message = f"Текст выходит за поля для печати у {len(problematic)} грамот:\n\n"
+            message = tr("Текст выходит за поля для печати у {count} грамот:\n\n").format(
+                count=len(problematic)
+            )
             for parts, problems in problematic[:12]:
                 details = "; ".join(
-                    f"{text or 'блок'}: +{overflow}px ({side})"
+                    tr("{text}: +{overflow}px ({side})").format(
+                        text=text or tr("блок"),
+                        overflow=overflow,
+                        side=side,
+                    )
                     for text, overflow, side in problems
                 )
                 message += f"• {' '.join(parts)}: {details}\n"
             if len(problematic) > 12:
-                message += f"\n…и ещё {len(problematic) - 12}"
+                message += "\n" + tr("…и ещё {count}").format(
+                    count=len(problematic) - 12
+                )
             answer = self._message(
                 "Текст выходит за поля для печати",
                 message,
@@ -1694,13 +1865,13 @@ class DiplomaGenerator(QMainWindow):
                     self._error("Нет ни одной грамоты, которая помещается в поля для печати.")
                     return
             elif answer != 0:
-                self.status_label.setText("Отменено пользователем")
+                self.status_label.setText(tr("Отменено пользователем"))
                 return
 
         if self.preview_check.isChecked():
             result = self.show_preview_dialog(generated_people)
             if result == QDialog.Rejected:
-                self.status_label.setText("Отменено пользователем")
+                self.status_label.setText(tr("Отменено пользователем"))
                 return
 
         policy = "number"
@@ -1711,7 +1882,9 @@ class DiplomaGenerator(QMainWindow):
             if target.exists():
                 answer = self._message(
                     "Файл уже существует",
-                    f"Файл «{target.name}» уже существует. Что сделать?",
+                    tr("Файл «{name}» уже существует. Что сделать?").format(
+                        name=target.name
+                    ),
                     [
                         ("Заменить", "primary"),
                         ("Создать с номером", ""),
@@ -1726,7 +1899,7 @@ class DiplomaGenerator(QMainWindow):
                 elif answer == 2:
                     policy = "skip"
                 else:
-                    self.status_label.setText("Отменено пользователем")
+                    self.status_label.setText(tr("Отменено пользователем"))
                     return
             else:
                 policy = "replace"
@@ -1735,10 +1908,12 @@ class DiplomaGenerator(QMainWindow):
             if existing:
                 answer = self._message(
                     "Файлы уже существуют",
-                    f"В папке уже есть {existing} файл(ов) с такими именами.\n"
-                    "Что сделать со всеми?\n\n"
-                    "«Оставить существующие»: старые файлы не пересоздаются, "
-                    "остальные ФИО будут сгенерированы.",
+                    tr(
+                        "В папке уже есть {count} файл(ов) с такими именами.\n"
+                        "Что сделать со всеми?\n\n"
+                        "«Оставить существующие»: старые файлы не пересоздаются, "
+                        "остальные ФИО будут сгенерированы."
+                    ).format(count=existing),
                     [
                         ("Заменить все", "primary"),
                         ("Создать с номерами", ""),
@@ -1753,7 +1928,7 @@ class DiplomaGenerator(QMainWindow):
                 elif answer == 2:
                     policy = "skip"
                 else:
-                    self.status_label.setText("Отменено пользователем")
+                    self.status_label.setText(tr("Отменено пользователем"))
                     return
 
         # Очистка выполняется только после всех подтверждений, чтобы отмена
@@ -1771,18 +1946,24 @@ class DiplomaGenerator(QMainWindow):
             if managed:
                 answer = self._message(
                     "Очистка предыдущих файлов",
-                    f"Удалить {len(managed)} файл(ов), созданных AutoFill ранее?\n"
-                    "Чужие файлы и папки не затрагиваются.",
+                    tr(
+                        "Удалить {count} файл(ов), созданных AutoFill ранее?\n"
+                        "Чужие файлы и папки не затрагиваются."
+                    ).format(count=len(managed)),
                     [("Удалить", ""), ("Отмена", "primary")],
                     default_btn=1,
                 )
                 if answer != 0:
-                    self.status_label.setText("Отменено пользователем")
+                    self.status_label.setText(tr("Отменено пользователем"))
                     return
                 removed, errors = cleanup_manifest(output_dir, exclude=self.template_path)
                 if errors:
                     self._message("Очистка", "\n".join(errors[:15]), [("ОК", "primary")])
-                self.status_label.setText(f"Удалено ранее созданных файлов: {removed}")
+                self.status_label.setText(
+                    tr("Удалено ранее созданных файлов: {removed}").format(
+                        removed=removed
+                    )
+                )
             self.cleanup_previous_check.setChecked(False)
 
         try:
@@ -1820,7 +2001,7 @@ class DiplomaGenerator(QMainWindow):
         self._set_generating(True)
         self.progress_bar.setRange(0, len(job.people))
         self.progress_bar.setValue(0)
-        self.status_label.setText("Генерация…")
+        self.status_label.setText(tr("Генерация…"))
         self._thread.start()
 
     def _set_generating(self, active: bool) -> None:
@@ -1839,9 +2020,15 @@ class DiplomaGenerator(QMainWindow):
         self.progress_bar.setRange(0, max(1, total))
         self.progress_bar.setValue(min(done, total))
         if name:
-            self.status_label.setText(f"Генерация: {done}/{total}, {name}")
+            self.status_label.setText(
+                tr("Генерация: {done}/{total}, {name}").format(
+                    done=done, total=total, name=name
+                )
+            )
         else:
-            self.status_label.setText(f"Генерация: {done}/{total}")
+            self.status_label.setText(
+                tr("Генерация: {done}/{total}").format(done=done, total=total)
+            )
 
     def _stop_worker_thread(self) -> None:
         thread = self._thread
@@ -1860,34 +2047,50 @@ class DiplomaGenerator(QMainWindow):
         self._update_generate_button()
 
         if getattr(result, "cancelled", False):
-            self.status_label.setText("Генерация отменена")
+            self.status_label.setText(tr("Генерация отменена"))
             self._message("Генерация", "Генерация отменена.", [("ОК", "primary")])
             self._schedule_preview()
             return
 
         output_dir = getattr(result, "output_dir", self.output_dir_edit.text())
         self.open_dir_btn.setVisible(True)
-        word = plural(result.created, ("грамота", "грамоты", "грамот"))
-        self.status_label.setText(f"Готово: {result.created} {word} ({output_dir})")
+        if is_english():
+            word = "diploma" if result.created == 1 else "diplomas"
+        else:
+            word = plural(result.created, ("грамота", "грамоты", "грамот"))
+        self.status_label.setText(
+            tr("Готово: {created} {word} ({output_dir})").format(
+                created=result.created, word=word, output_dir=output_dir
+            )
+        )
 
+        created_word = (
+            "diploma" if result.created == 1 else "diplomas"
+        ) if is_english() else plural(
+            result.created, ("грамота", "грамоты", "грамот")
+        )
         lines = [
-            f"Создано: {result.created} {plural(result.created, ('грамота', 'грамоты', 'грамот'))}",
-            f"Пропущено: {result.skipped}",
+            tr("Создано: {created} {word}").format(
+                created=result.created, word=created_word
+            ),
+            tr("Пропущено: {count}").format(count=result.skipped),
         ]
         if result.errors:
-            lines.append(f"Ошибок: {len(result.errors)}")
+            lines.append(tr("Ошибок: {count}").format(count=len(result.errors)))
             lines.append("")
             for name, error in result.errors[:10]:
                 lines.append(f"• {name}: {error}")
             if len(result.errors) > 10:
-                lines.append(f"…и ещё {len(result.errors) - 10}")
+                lines.append(
+                    tr("…и ещё {count}").format(count=len(result.errors) - 10)
+                )
         if result.files:
             lines.append("")
-            lines.append(f"Файлов создано: {len(result.files)}")
+            lines.append(tr("Файлов создано: {count}").format(count=len(result.files)))
             if len(result.files) == 1:
                 lines.append(Path(result.files[0]).name)
         lines.append("")
-        lines.append(f"Папка: {output_dir}")
+        lines.append(tr("Папка: {path}").format(path=output_dir))
 
         answer = self._message(
             "Готово",
@@ -1902,7 +2105,7 @@ class DiplomaGenerator(QMainWindow):
         self._stop_worker_thread()
         self._set_generating(False)
         self._update_generate_button()
-        self.status_label.setText("Ошибка генерации")
+        self.status_label.setText(tr("Ошибка генерации"))
         self._message("Ошибка генерации", details, [("ОК", "primary")])
         self._schedule_preview()
 
@@ -1910,7 +2113,7 @@ class DiplomaGenerator(QMainWindow):
         if self._worker:
             self._worker.cancel()
             self.cancel_btn.setEnabled(False)
-            self.status_label.setText("Отмена…")
+            self.status_label.setText(tr("Отмена…"))
 
     def _is_generating(self) -> bool:
         return self._thread is not None and self._thread.isRunning()
@@ -1925,7 +2128,13 @@ class DiplomaGenerator(QMainWindow):
         buttons: list[tuple[str, str]] | None = None,
         default_btn: int = 0,
     ) -> int | None:
-        dialog = MessageDialog(self, title, text, buttons=buttons, default_btn=default_btn)
+        dialog = MessageDialog(
+            self,
+            tr(title),
+            tr(text),
+            buttons=[(tr(label), kind) for label, kind in (buttons or [])] or None,
+            default_btn=default_btn,
+        )
         self.apply_theme_to_dialog(dialog, self.current_theme)
         dialog.exec()
         return dialog.clicked_index
@@ -1946,52 +2155,54 @@ class DiplomaGenerator(QMainWindow):
     # Справка
     # ------------------------------------------------------------------
     def show_help(self) -> None:
-        text = """КАК РАБОТАТЬ
-
-1. Выберите шаблон грамоты (JPG или PNG).
-2. Выберите шрифт из списка или укажите файл TTF, OTF или TTC.
-3. Настройте размер, цвет и интервал текста.
-4. Вставьте список ФИО: каждая строка соответствует одному человеку.
-5. Откройте вкладку «Позиция» и настройте место текста. Можно открыть
-   редактор и указать точку прямо на шаблоне.
-6. Нажмите «Сгенерировать».
-
-РЕДАКТОР
-
-Справа показан живой предпросмотр. Двойной клик по нему или клавиша F5
-открывает редактор. В редакторе можно изменить шрифт, размер, цвет,
-положение, выравнивание и поля для печати. Перед генерацией редактор
-можно открывать автоматически.
-
-ПОИСК
-
-Поиск показывает только подходящие строки. Пока поиск включён, список
-нельзя редактировать, чтобы не потерять скрытые строки. Очистите поиск,
-чтобы вернуться к редактированию.
-
-ИСКЛЮЧЕНИЯ
-
-Сюда попадают ФИО, которые не помещаются в поля для печати. Их можно
-вернуть в основной список. Перед переносом приложение спросит подтверждение.
-
-ФАЙЛЫ
-
-AutoFill не удаляет всю папку. Он убирает только свои старые файлы,
-которые создал сам (по манифесту .autofill-manifest.json). Если файл
-с таким именем уже есть, выберите: заменить, добавить номер или
-оставить существующие (старые файлы не пересоздаются, остальные
-грамоты будут созданы). Решение применяется ко всей пачке.
-
-ГОРЯЧИЕ КЛАВИШИ
-
-Ctrl+O: шаблон
-Ctrl+Shift+O: список
-Ctrl+G: генерация
-F5: редактор
-Esc: отмена генерации
-
-Настройки сохраняются при выходе или кнопкой в разделе «Настройки»."""
-        self._message("Инструкция", text, [("Понятно", "primary")])
+        sections = [
+            tr("КАК РАБОТАТЬ"),
+            tr(
+                "1. Выберите шаблон грамоты (JPG или PNG).\n"
+                "2. Выберите шрифт из списка или укажите файл TTF, OTF или TTC.\n"
+                "3. Настройте размер, цвет и интервал текста.\n"
+                "4. Вставьте список ФИО: каждая строка соответствует одному человеку.\n"
+                "5. Откройте вкладку «Позиция» и настройте место текста. Можно открыть\n"
+                "   редактор и указать точку прямо на шаблоне.\n"
+                "6. Нажмите «Сгенерировать»."
+            ),
+            tr("РЕДАКТОР"),
+            tr(
+                "Справа показан живой предпросмотр. Двойной клик по нему или клавиша F5\n"
+                "открывает редактор. В редакторе можно изменить шрифт, размер, цвет,\n"
+                "положение, выравнивание и поля для печати. Перед генерацией редактор\n"
+                "можно открывать автоматически."
+            ),
+            tr("ПОИСК"),
+            tr(
+                "Поиск показывает только подходящие строки. Пока поиск включён, список\n"
+                "нельзя редактировать, чтобы не потерять скрытые строки. Очистите поиск,\n"
+                "чтобы вернуться к редактированию."
+            ),
+            tr("ИСКЛЮЧЕНИЯ"),
+            tr(
+                "Сюда попадают ФИО, которые не помещаются в поля для печати. Их можно\n"
+                "вернуть в основной список. Перед переносом приложение спросит подтверждение."
+            ),
+            tr("ФАЙЛЫ"),
+            tr(
+                "AutoFill не удаляет всю папку. Он убирает только свои старые файлы,\n"
+                "которые создал сам (по манифесту .autofill-manifest.json). Если файл\n"
+                "с таким именем уже есть, выберите: заменить, добавить номер или\n"
+                "оставить существующие (старые файлы не пересоздаются, остальные\n"
+                "грамоты будут созданы). Решение применяется ко всей пачке."
+            ),
+            tr("ГОРЯЧИЕ КЛАВИШИ"),
+            tr(
+                "Ctrl+O: шаблон\n"
+                "Ctrl+Shift+O: список\n"
+                "Ctrl+G: генерация\n"
+                "F5: редактор\n"
+                "Esc: отмена генерации"
+            ),
+            tr("Настройки сохраняются при выходе или кнопкой в разделе «Настройки»."),
+        ]
+        self._message("Инструкция", "\n\n".join(sections), [("Понятно", "primary")])
 
     def show_license(self) -> None:
         text = """AutoFill
@@ -2005,9 +2216,9 @@ https://polyformproject.org/licenses/noncommercial/1.0.0"""
     def show_about(self) -> None:
         text = f"""AutoFill {__version__}
 
-Массовое заполнение грамот ФИО.
+{tr("Массовое заполнение грамот ФИО.")}
 
-Авторы:
+{tr("Авторы:")}
 Alexey «TWorker» Zhaliy
 Maxim «jojer» Odincov
 
