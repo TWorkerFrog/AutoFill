@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from PIL import ImageFont
 
 from core.name_format import (
     format_name_lines,
@@ -10,7 +11,6 @@ from core.name_format import (
     resolve_auto_lines,
     wrap_text,
 )
-from PIL import ImageFont
 
 
 @pytest.fixture(scope="module")

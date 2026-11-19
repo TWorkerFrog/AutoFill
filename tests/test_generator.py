@@ -14,6 +14,7 @@ from core.generator import (
     OutputConfig,
     RenderConfig,
     generate,
+    load_template,
 )
 
 
@@ -266,6 +267,147 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(result.created, 1)
         self.assertFalse(managed.exists())
         self.assertTrue(foreign.exists())
+
+
+class GeneratorErrorPathTests(unittest.TestCase):
+    """Ошибки не роняют generate: они попадают в result.errors."""
+
+    def setUp(self):
+        self.font_path = _font_path()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.directory = Path(self.tmp.name)
+        self.template = _template(self.directory)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _job(self, output_dir, template="template.png", **output_kwargs):
+        return GenerationJob(
+            template_path=str(self.directory / template),
+            people=(("Иванов", "Иван", "Иванович"), ("Петров", "Пётр", "Петрович")),
+            render=_render_config(self.font_path),
+            output=OutputConfig(str(output_dir), **output_kwargs),
+        )
+
+    def test_missing_template_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            generate(self._job(self.directory / "out", template="absent.png"))
+
+    def test_missing_font_raises(self):
+        job = GenerationJob(
+            template_path=str(self.directory / "template.png"),
+            people=(("Иванов",),),
+            render=_render_config(str(self.directory / "absent.ttf")),
+            output=OutputConfig(str(self.directory / "out"), output_format="png"),
+        )
+        with self.assertRaises(FileNotFoundError):
+            generate(job)
+
+    def test_empty_font_path_raises(self):
+        job = GenerationJob(
+            template_path=str(self.directory / "template.png"),
+            people=(("Иванов",),),
+            render=_render_config(""),
+            output=OutputConfig(str(self.directory / "out"), output_format="png"),
+        )
+        with self.assertRaises(FileNotFoundError):
+            generate(job)
+
+    def test_per_person_error_is_collected_not_raised(self):
+        output = self.directory / "out"
+        job = self._job(output, output_format="png")
+        real_render = None
+        from core import generator as generator_module
+
+        real_render = generator_module.render_page
+
+        def flaky(template, parts, font, config):
+            if parts and parts[0] == "Петров":
+                raise RuntimeError("сбой рендера по имени")
+            return real_render(template, parts, font, config)
+
+        with patch.object(generator_module, "render_page", flaky):
+            result = generate(job)
+        self.assertEqual(result.created, 1)
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(result.errors[0][0], "Петров Пётр Петрович")
+        self.assertIn("сбой рендера", result.errors[0][1])
+        # Успешный файл при этом создан и записан в манифест.
+        self.assertTrue(Path(result.files[0]).is_file())
+        self.assertTrue((output / ".autofill-manifest.json").is_file())
+
+    def test_conflict_cancel_policy_cancels(self):
+        output = self.directory / "out"
+        output.mkdir()
+        (output / "Иванов_Иван.pdf").write_bytes(b"old")
+        job = GenerationJob(
+            template_path=str(self.template),
+            people=(("Иванов", "Иван"),),
+            render=_render_config(self.font_path),
+            output=OutputConfig(str(output), output_format="pdf", conflict_policy="cancel"),
+        )
+        result = generate(job)
+        self.assertTrue(result.cancelled)
+        self.assertEqual(result.created, 0)
+        self.assertEqual((output / "Иванов_Иван.pdf").read_bytes(), b"old")
+
+    def test_cleanup_previous_removes_only_managed(self):
+        output = self.directory / "out"
+        output.mkdir()
+        managed = output / "old_managed.png"
+        foreign = output / "foreign.png"
+        managed.write_bytes(b"x")
+        foreign.write_bytes(b"x")
+        from core.paths import save_manifest
+
+        save_manifest(output, ["old_managed.png"])
+        result = generate(self._job(output, output_format="png", cleanup_previous=True))
+        self.assertFalse(managed.exists())
+        self.assertTrue(foreign.exists())
+        self.assertEqual(result.created, 2)
+
+    def test_progress_reports_zero_then_each_person(self):
+        calls = []
+
+        job = self._job(self.directory / "out", output_format="png")
+        generate(job, progress=lambda done, total, name: calls.append((done, total, name)))
+        self.assertEqual(calls[0], (0, 2, ""))
+        self.assertEqual(calls[-1], (2, 2, "Петров Пётр Петрович"))
+        self.assertEqual(len(calls), 3)
+
+
+class TemplateLoadingTests(unittest.TestCase):
+    """EXIF-поворот и DPI: метаданные шаблона обязаны уважаться."""
+
+    def setUp(self):
+        self.font_path = _font_path()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.directory = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_dpi_fallback_without_metadata(self):
+        template = self.directory / "plain.png"
+        Image.new("RGB", (400, 300), "white").save(template)  # без dpi=
+        image, dpi = load_template(template)
+        self.assertEqual(dpi, 150.0)
+        self.assertEqual(image.size, (400, 300))
+
+    def test_exif_orientation_rotates_image(self):
+        template = self.directory / "rotated.jpg"
+        image = Image.new("RGB", (400, 300), "white")
+        exif = Image.Exif()
+        exif[274] = 6  # Orientation: повернуть на 90° CW
+        image.save(template, exif=exif)
+        loaded, _dpi = load_template(template)
+        self.assertEqual(loaded.size, (300, 400))
+
+    def test_dpi_parsed_from_template(self):
+        template = self.directory / "dpi.png"
+        Image.new("RGB", (400, 300), "white").save(template, dpi=(216, 216))
+        _image, dpi = load_template(template)
+        self.assertAlmostEqual(dpi, 216.0, delta=0.5)
 
 
 if __name__ == "__main__":

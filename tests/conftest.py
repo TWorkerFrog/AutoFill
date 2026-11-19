@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -89,10 +90,8 @@ def window_factory(qapp, tmp_store, monkeypatch):
 
     yield make
     for window in created:
-        try:
+        with suppress(Exception):
             window.close()
-        except Exception:  # noqa: BLE001 - окно могло быть уже удалено
-            pass
         window.deleteLater()
 
 

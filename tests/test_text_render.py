@@ -112,5 +112,73 @@ class TextRenderTests(unittest.TestCase):
         self.assertEqual(" ".join(narrow), "Иванов Иван Иванович Дополнительное")
 
 
+class TextRenderAnchorTests(unittest.TestCase):
+    """Якоря и границы на реальной отрисовке - с платформонезависимыми
+    допусками (тест не привязан к Arial, метрики любого TTF проходят)."""
+
+    def setUp(self):
+        self.font = _font()
+        self.image = Image.new("RGB", (800, 600), "white")
+        self.draw = ImageDraw.Draw(self.image)
+
+    def test_right_alignment_draws_to_edge(self):
+        draw_text_block(
+            self.draw, ["Тест"], self.font, (0, 0, 0),
+            700, 300, 0, 0, "right", 0, 0, 800, 600,
+        )
+        bbox = _ink_bbox(self.image)
+        self.assertIsNotNone(bbox)
+        self.assertLessEqual(abs(bbox[2] - 700), 6)
+        self.assertGreater(bbox[0], 400)
+
+    def test_numeric_x_left_anchor_is_exact(self):
+        draw_text_block(
+            self.draw, ["Тест"], self.font, (0, 0, 0),
+            100, 300, 0, 0, "left", 0, 0, 800, 600,
+        )
+        bbox = _ink_bbox(self.image)
+        self.assertIsNotNone(bbox)
+        self.assertLessEqual(abs(bbox[0] - 100), 8)
+
+    def test_two_lines_vertical_center_is_block_center(self):
+        draw_text_block(
+            self.draw, ["Одна", "Две"], self.font, (0, 0, 0),
+            "center", "center", 0, 0, "center", 0, 0, 800, 600,
+        )
+        bbox = _ink_bbox(self.image)
+        self.assertIsNotNone(bbox)
+        self.assertLessEqual(abs((bbox[1] + bbox[3]) / 2 - 300), 14)
+
+    def test_zero_letter_spacing_has_positive_width(self):
+        plain = measure_block(["Тест"], self.font, letter_spacing=0)
+        self.assertGreater(plain.width, 0)
+
+    def test_bounds_report_right_and_bottom_overflow(self):
+        problems = check_text_bounds(
+            ["Тест"], self.font, "center", "center", 0, 800, 40,
+            img_height=600, y="center", x_offset=500, y_offset=400,
+        )
+        sides = {side for _line, _overflow, side in problems}
+        self.assertIn("right", sides)
+        self.assertIn("bottom", sides)
+
+    def test_bounds_margin_eats_space(self):
+        clean_small = check_text_bounds(
+            ["Тест"], self.font, "center", "center", 0, 800, 40,
+            img_height=600, y="center",
+        )
+        tight = check_text_bounds(
+            ["Тест"], self.font, "center", "center", 0, 800, 350,
+            img_height=600, y="center",
+        )
+        self.assertEqual(clean_small, [])
+        self.assertTrue(tight)
+
+    def test_measure_block_multiline_width_is_max_line(self):
+        metrics = measure_block(["Широкаястрока", "Узк"], self.font, letter_spacing=0)
+        self.assertGreaterEqual(metrics.width, metrics.line_widths[1])
+        self.assertLessEqual(metrics.width, metrics.line_widths[0] + 1)
+
+
 if __name__ == "__main__":
     unittest.main()
