@@ -38,6 +38,9 @@ EN: dict[str, str] = {
     "Шрифты (*.ttf *.otf *.ttc)": "Fonts (*.ttf *.otf *.ttc)",
     "Выберите папку для сохранения": "Choose an output folder",
     "Выберите файл со списком": "Choose a name list file",
+    "Выберите файл шрифта": "Choose a font file",
+    "Выберите шаблон грамоты": "Choose a diploma template",
+    "Формат ввода цвета": "Color input format",
     "Текст (*.txt *.csv);;Все файлы (*)": "Text (*.txt *.csv);;All files (*)",
     "PNG: отдельный файл для каждого ФИО": "PNG: a separate file for each name",
     "AutoFill запоминает созданные им файлы в манифесте "

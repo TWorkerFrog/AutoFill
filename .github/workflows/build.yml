@@ -2,7 +2,7 @@ name: Checks
 
 on:
   push:
-    branches: [ main, master, "refactor/**" ]
+    branches: [ main, master, "refactor/**", "tests", "tests/**" ]
   pull_request:
   workflow_dispatch:
 
