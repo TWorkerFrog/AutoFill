@@ -1,4 +1,4 @@
-name: Build AutoFill
+name: Checks
 
 on:
   push:
@@ -31,26 +31,3 @@ jobs:
         run: ruff check .
       - name: Run tests
         run: python -m pytest tests -q
-
-  build-windows:
-    needs: [checks]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pyinstaller
-      - name: Build EXE
-        run: python build.py
-      - name: Upload EXE
-        uses: actions/upload-artifact@v7
-        with:
-          name: AutoFill-Windows
-          path: dist/AutoFill.exe
-          if-no-files-found: error
