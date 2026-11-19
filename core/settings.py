@@ -13,9 +13,6 @@ from core.paths import backup_corrupt_file, load_json, write_json_atomic
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
-
-
 def app_data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
     if base:
@@ -29,7 +26,6 @@ def default_settings_path() -> Path:
 
 @dataclass
 class AppSettings:
-    version: int = SCHEMA_VERSION
     template_path: str = ""
     font_path: str = ""
     selected_font_family: str = ""
@@ -54,10 +50,10 @@ class AppSettings:
     output_format: str = "pdf"
     pdf_mode: str = "multi"
     pdf_name: str = "Все_грамоты"
-    preview: bool = True
+    preview: bool = False
     preview_mode: str = "test"
     preview_custom: str = ""
-    theme: str = "dark"
+    theme: str = "system"
     language: str = "ru"
     color_input_format: str = "Hex"
     ask_before_move: bool = True
@@ -130,7 +126,6 @@ def normalize_settings(raw: dict[str, Any] | None) -> AppSettings:
         if field_name in raw:
             data[field_name] = raw[field_name]
 
-    data["version"] = SCHEMA_VERSION
     data["font_size"] = _clamp(
         data.get("font_size", defaults.font_size) or defaults.font_size,
         1, 2000, defaults.font_size,

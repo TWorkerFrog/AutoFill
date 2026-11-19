@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import subprocess
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -10,7 +12,6 @@ from PySide6.QtCore import (
     QByteArray,
     QEvent,
     QProcess,
-    QProcessEnvironment,
     QStandardPaths,
     Qt,
     QThread,
@@ -114,6 +115,7 @@ class DiplomaGenerator(QMainWindow):
         self._worker: GenerationWorker | None = None
         self._thread: QThread | None = None
         self._loading_settings = False
+        self._restarting = False
 
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
@@ -136,6 +138,88 @@ class DiplomaGenerator(QMainWindow):
         # Нативный заголовок можно перекрасить только после создания HWND.
         self._apply_theme(self.current_theme)
         self._place_help_button()
+        # Соотношение колонок задаём отложенно: первая укладка лейаута
+        # срабатывает уже после showEvent и перебивает прямой setSizes.
+        if getattr(self, "_initial_splitter_pending", False):
+            QTimer.singleShot(0, self._apply_initial_splitter_ratio)
+
+    def _apply_initial_splitter_ratio(self) -> None:
+        """Первое открытие: предпросмотр занимает ~45% ширины сплиттера
+        (как в эталонном макете), остальное — колонка настроек."""
+
+        if not getattr(self, "_initial_splitter_pending", False):
+            return
+        self._initial_splitter_pending = False
+        available = self.main_splitter.width()
+        if available < 100:
+            return
+        preview = max(self.preview_pane.minimumWidth(), round(available * 0.45))
+        preview_max = max(
+            self.preview_pane.minimumWidth(),
+            available - self._settings_column_min(),
+        )
+        preview = min(preview, preview_max)
+        self._initial_preview_target = preview
+        self.main_splitter.setSizes([available - preview, preview])
+        self._clamp_preview_splitter()
+        # Укладка лейаута и первый рендер предпросмотра могут перекроить
+        # сплиттер уже после setSizes — проверяем устойку и повторяем.
+        QTimer.singleShot(250, self._ensure_initial_splitter_ratio)
+
+    def _ensure_initial_splitter_ratio(self) -> None:
+        """Возвращает стартовое соотношение, если его перекроил лейаут.
+        Ручное перетаскивание пользователя важнее, не трогаем."""
+
+        target = getattr(self, "_initial_preview_target", 0)
+        if not target or getattr(self, "_splitter_touched", False):
+            return
+        sizes = self.main_splitter.sizes()
+        if len(sizes) == 2 and abs(sizes[1] - target) > 2:
+            available = self.main_splitter.width()
+            self.main_splitter.setSizes([available - target, target])
+
+    def _on_main_splitter_moved(self, *_args) -> None:
+        self._splitter_touched = True
+        self._clamp_preview_splitter()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._clamp_preview_splitter()
+
+    def _settings_column_min(self) -> int:
+        """Минимальная ширина колонки настроек: уже её предпросмотр
+        отъедать не может ни при каком перетаскивании.  Обёртки страниц
+        (QScrollArea) занижают минимум, поэтому считаем по страницам
+        вкладок — самый широкий контент (ряд «Шаблон и шрифт») и есть
+        предел."""
+
+        hints = [self.tabs.minimumSizeHint().width()]
+        for index in range(self.tabs.count()):
+            page = self.tabs.widget(index)
+            if page is None:
+                continue
+            # Страница обёрнута в QScrollArea: её собственный минимум
+            # занижен, берём минимум внутренней страницы с контентом.
+            inner = page.findChild(QWidget, "tab_page") or page
+            hints.append(inner.minimumSizeHint().width())
+        return max(hints + [460])
+
+    def _clamp_preview_splitter(self) -> None:
+        """Предпросмотр может расти до конца минимальной колонки настроек,
+        но не дальше — остаток всегда уходит колонке настроек.
+        Программный setSizes не порождает splitterMoved, поэтому клэмп
+        вызывается и на изменении размера окна."""
+
+        sizes = self.main_splitter.sizes()
+        if len(sizes) != 2:
+            return
+        available = self.main_splitter.width()
+        preview_max = max(
+            self.preview_pane.minimumWidth(),
+            available - self._settings_column_min(),
+        )
+        if sizes[1] > preview_max:
+            self.main_splitter.setSizes([available - preview_max, preview_max])
 
     def eventFilter(self, watched, event) -> bool:
         if watched is self.tabs and event.type() == QEvent.Resize:
@@ -196,10 +280,16 @@ class DiplomaGenerator(QMainWindow):
         self.preview_pane.setMinimumWidth(280)
         self.preview_pane.openRequested.connect(self.open_preview)
         self.main_splitter.addWidget(self.preview_pane)
+        self.main_splitter.splitterMoved.connect(self._on_main_splitter_moved)
         self.main_splitter.setStretchFactor(0, 1)
         self.main_splitter.setStretchFactor(1, 0)
         self.main_splitter.setCollapsible(1, False)
-        self.main_splitter.setSizes([780, 380])
+        # Стартовое соотношение колонок (55:45) выставляется после показа
+        # окна; сохранённые в настройках размеры подменяют его в
+        # apply_settings.
+        self._initial_splitter_pending = True
+        self._initial_preview_target = 0
+        self._splitter_touched = False
         main_layout.addWidget(self.main_splitter, 1)
 
         self.build_tab_main()
@@ -640,7 +730,10 @@ class DiplomaGenerator(QMainWindow):
         output_layout.addWidget(self.cleanup_previous_check)
 
         self.preview_check = QCheckBox("Открывать редактор перед генерацией")
-        self.preview_check.setChecked(True)
+        # Живой предпросмотр уже показывает ту же грамоту, поэтому модальное
+        # окно перед генерацией по умолчанию выключено. Кому нужна финальная
+        # проверка, включают галочку один раз: выбор сохраняется.
+        self.preview_check.setChecked(False)
         output_layout.addWidget(self.preview_check)
         layout.addWidget(output_group)
 
@@ -823,9 +916,15 @@ class DiplomaGenerator(QMainWindow):
                 "dark": self.rb_dark,
                 "light": self.rb_light,
                 "system": self.rb_system,
-            }.get(settings.theme, self.rb_system if settings.theme == "system" else self.rb_dark)
+            }.get(settings.theme, self.rb_dark)
+            # Сигналы блокируются: применяем тему ниже одним вызовом.
+            # Иначе при уже выбранной кнопке toggled не срабатывает и окно
+            # остаётся в старой теме, пока диалоги получают новую.
+            theme_button.blockSignals(True)
             theme_button.setChecked(True)
+            theme_button.blockSignals(False)
             self.current_theme = self._resolve_theme(settings.theme)
+            self._apply_theme(self.current_theme)
 
             self.language_combo.blockSignals(True)
             language_index = self.language_combo.findData(settings.language)
@@ -837,6 +936,8 @@ class DiplomaGenerator(QMainWindow):
                 if not geometry.isEmpty():
                     self.restoreGeometry(geometry)
             if settings.main_splitter_sizes:
+                # Сохранённое соотношение важнее стартового 55:45.
+                self._initial_splitter_pending = False
                 self.main_splitter.setSizes(settings.main_splitter_sizes)
             if settings.splitter_sizes:
                 self.names_splitter.setSizes(settings.splitter_sizes)
@@ -930,7 +1031,8 @@ class DiplomaGenerator(QMainWindow):
         """Возвращает настройки к значениям по умолчанию.
 
         Язык интерфейса и геометрия окна не сбрасываются: они к содержимому
-        работы отношения не имеют.
+        работы отношения не имеют.  Положение разделителей возвращается
+        к состоянию первого открытия (55:45).
         """
 
         answer = self._message(
@@ -944,8 +1046,6 @@ class DiplomaGenerator(QMainWindow):
         current = self._collect_settings()
         defaults = AppSettings()
         defaults.window_geometry = current.window_geometry
-        defaults.main_splitter_sizes = current.main_splitter_sizes
-        defaults.splitter_sizes = current.splitter_sizes
         defaults.language = current.language
         try:
             self.settings_store.save(defaults)
@@ -953,6 +1053,11 @@ class DiplomaGenerator(QMainWindow):
             self._message("Ошибка сохранения", str(exc), [("ОК", "primary")])
             return
         self.apply_settings(defaults)
+        # Соотношение колонок — как при первом открытии: предпросмотр 45%,
+        # список ФИО свёрнут так же, как на старте.
+        self._initial_splitter_pending = True
+        self._apply_initial_splitter_ratio()
+        self.names_splitter.setSizes([390, 0])
         self.status_label.setText(tr("Настройки сброшены"))
 
     def _on_language_changed(self, _index: int) -> None:
@@ -971,25 +1076,74 @@ class DiplomaGenerator(QMainWindow):
             self.language_combo.blockSignals(False)
             return
         if self.save_settings(silent=True):
+            self._restarting = True
             self._restart_app()
 
     def _restart_app(self) -> None:
         if getattr(sys, "frozen", False):
+            program = sys.executable
             arguments = sys.argv[1:]
         else:
+            program = sys.executable
             arguments = [str(Path(sys.argv[0]).resolve()), *sys.argv[1:]]
-        process = QProcess()
-        environment = QProcessEnvironment.systemEnvironment()
         # Новый процесс задерживает показ окна: старый должен успеть
         # закрыться, чтобы окна не мелькали и не конфликтовали.
-        environment.insert("AUTOFILL_RESTART_DELAY_MS", "900")
-        process.setProcessEnvironment(environment)
-        process.setProgram(sys.executable)
-        process.setArguments(arguments)
-        process.startDetached()
+        # startDetached наследует окружение текущего процесса, поэтому
+        # переменную выставляем прямо в os.environ.
+        os.environ["AUTOFILL_RESTART_DELAY_MS"] = "900"
+        # PySide6 возвращает из startDetached кортеж (успех, pid), а не bool.
+        result = QProcess.startDetached(
+            program,
+            arguments,
+            str(Path.cwd()),
+        )
+        if isinstance(result, tuple):
+            started = bool(result[0]) if result else False
+            pid = int(result[1]) if len(result) > 1 else 0
+        else:
+            started = bool(result)
+            pid = 0
+        log.info(
+            "Перезапуск для смены языка: program=%s args=%s started=%s pid=%s",
+            program,
+            arguments,
+            started,
+            pid,
+        )
+        if not started:
+            # Запасной путь: Qt мог не найти исполняемый файл, но subprocess
+            # с отдельной группой процессов обычно срабатывает.
+            try:
+                process = subprocess.Popen(
+                    [program, *arguments],
+                    cwd=str(Path.cwd()),
+                    env={**os.environ, "AUTOFILL_RESTART_DELAY_MS": "900"},
+                    creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                    | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+                    close_fds=True,
+                )
+                started = True
+                log.info(
+                    "Перезапуск через subprocess: pid=%s", process.pid
+                )
+            except OSError as exc:
+                log.error("Не удалось перезапустить приложение: %s", exc)
+        if not started:
+            self._restarting = False
+            self._message(
+                "Смена языка",
+                "Не удалось перезапустить приложение. Закройте и откройте его вручную.",
+                [("ОК", "primary")],
+            )
+            return
         QApplication.quit()
 
     def closeEvent(self, event) -> None:
+        # При смене языка настройки уже сохранены, а окно закрывается
+        # программно: не показываем диалог «сохранить перед выходом».
+        if self._restarting:
+            event.accept()
+            return
         if self._thread is not None and self._thread.isRunning():
             answer = self._message(
                 "Генерация выполняется",
@@ -1054,6 +1208,11 @@ class DiplomaGenerator(QMainWindow):
 
     def change_theme(self, _checked: bool = False) -> None:
         if self._loading_settings:
+            return
+        # При переключении радиокнопок сначала приходит toggled(False) от
+        # старой кнопки, когда ни одна ещё не выбрана. В этот момент тему
+        # менять нельзя, иначе окно мигает и может остаться в чужой теме.
+        if not any(button.isChecked() for button in self.theme_group.buttons()):
             return
         self._apply_theme(self._resolve_theme(self.get_theme_choice()))
 

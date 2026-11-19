@@ -1,5 +1,5 @@
 #define AppName "AutoFill"
-#define AppVersion "1.1.0"
+#define AppVersion "1.1"
 #define AppPublisher "TWorker and Maxim Odincov"
 #define AppExeName "AutoFill.exe"
 
@@ -9,7 +9,7 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
-VersionInfoVersion=1.1.0.0
+VersionInfoVersion=1.1
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes

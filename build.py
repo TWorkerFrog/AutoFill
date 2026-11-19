@@ -58,6 +58,17 @@ def compile_resources() -> bool:
     return True
 
 
+def _qt_translation_dir() -> Path | None:
+    """Каталог штатных переводов Qt из установленного PySide6."""
+
+    try:
+        import PySide6
+    except ImportError:
+        return None
+    candidate = Path(PySide6.__file__).parent / "translations"
+    return candidate if candidate.is_dir() else None
+
+
 def build_exe() -> int:
     print("=" * 60)
     print("СБОРКА AutoFill")
@@ -101,6 +112,17 @@ def build_exe() -> int:
         "--noconfirm",
         str(ROOT / "main.py"),
     ]
+
+    # Штатные переводы Qt нужны для русских диалогов цвета и файлов.
+    translations_dir = _qt_translation_dir()
+    if translations_dir is not None:
+        for name in ("qtbase_ru.qm", "qtbase_en.qm", "qt_ru.qm", "qt_en.qm"):
+            source = translations_dir / name
+            if source.is_file():
+                cmd[-3:-3] = [
+                    "--add-data",
+                    f"{source}{separator}PySide6/translations",
+                ]
 
     print("\nСборка…")
     result = subprocess.run(cmd, cwd=ROOT, check=False)

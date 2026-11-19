@@ -175,6 +175,9 @@ EN: dict[str, str] = {
     "Чтобы применить язык, приложение нужно перезапустить.": (
         "The application must restart to apply the language."
     ),
+    "Не удалось перезапустить приложение. Закройте и откройте его вручную.": (
+        "Could not restart the application. Close and open it manually."
+    ),
     # Подсказки редактора
     "ПКМ: поставить и тянуть крестик": "Right click: place and drag marker",
     "ЛКМ + перетаскивание: двигать изображение": "Left drag: move image",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -53,8 +53,11 @@ class PreviewPane(QFrame):
         self.image_label.setObjectName("preview_image")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setWordWrap(True)
-        self.image_label.setMinimumSize(220, 220)
-        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.image_label.setMinimumSize(120, 120)
+        # Ignored: картинка не диктует layout минимальный размер, иначе
+        # предпросмотр распирает панель и наезжает на соседние элементы.
+        self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.image_label.installEventFilter(self)
         canvas_layout.addWidget(self.image_label)
         layout.addWidget(self.canvas, 1)
 
@@ -106,6 +109,13 @@ class PreviewPane(QFrame):
         self.image_label.setPixmap(
             self._original.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
+
+    def eventFilter(self, watched, event) -> bool:
+        # Метка получает настоящий размер только после раскладки, поэтому
+        # пересчитываем картинку именно по её resize, а не по resize панели.
+        if watched is self.image_label and event.type() == QEvent.Resize:
+            self._rescale()
+        return super().eventFilter(watched, event)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

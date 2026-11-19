@@ -1,3 +1,4 @@
+import faulthandler
 import logging
 import os
 import sys
@@ -10,8 +11,11 @@ import resources_rc  # noqa: F401  # регистрирует встроенны
 from core.i18n import install_qt_translations, set_language
 from core.screen_utils import center_window
 from core.settings import SettingsStore, app_data_dir
-from core.version import APP_NAME
+from core.version import APP_NAME, __version__
 from ui.main_window import DiplomaGenerator
+
+# Открытый файл для faulthandler: держим ссылку, иначе он закроется.
+_crash_handle = None
 
 
 def resource_path(relative_path: str) -> str:
@@ -60,14 +64,57 @@ def install_exception_hook() -> None:
     sys.excepthook = handle
 
 
+def enable_faulthandler() -> None:
+    """Пишет стек при жёстком падении процесса в logs/crash.log.
+
+    Обычные исключения ловит excepthook, но если падает сам интерпретатор
+    (например, внутри Qt), Python завершается без внятного сообщения.
+    """
+
+    global _crash_handle
+    if _crash_handle is not None:
+        return
+    try:
+        log_dir = app_data_dir() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        # Файл должен жить всё время работы приложения: faulthandler
+        # пишет в него при аварийном завершении.
+        _crash_handle = open(  # noqa: SIM115
+            log_dir / "crash.log", "a", encoding="utf-8"
+        )
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "Файл crash.log недоступен: %s", exc
+        )
+        return
+    _crash_handle.write(f"\n=== запуск {__version__} ===\n")
+    _crash_handle.flush()
+    faulthandler.enable(file=_crash_handle, all_threads=True)
+
+
+def log_startup(settings) -> None:
+    log = logging.getLogger("autofill")
+    log.info(
+        "Запуск %s %s: frozen=%s, язык=%s, тема=%s, python=%s",
+        APP_NAME,
+        __version__,
+        getattr(sys, "frozen", False),
+        settings.language,
+        settings.theme,
+        sys.version.split()[0],
+    )
+
+
 if __name__ == "__main__":
     configure_logging()
+    enable_faulthandler()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("TWorker")
     install_exception_hook()
 
     loaded_settings = SettingsStore().load()
+    log_startup(loaded_settings)
     set_language(loaded_settings.language)
     install_qt_translations(app, loaded_settings.language)
 

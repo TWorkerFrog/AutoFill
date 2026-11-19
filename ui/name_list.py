@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -89,13 +89,6 @@ class NameListEditor(QWidget):
         self.clear_button.clicked.connect(self.clear)
         buttons.addWidget(self.clear_button)
         buttons.addStretch()
-
-        # Счётчик живёт в правом нижнем углу списка, а не в шапке.
-        self.count_label = QLabel(tr("ФИО: 0"))
-        self.count_label.setObjectName("secondary_label")
-        self.count_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.count_label.setToolTip(tr("Сколько ФИО в списке"))
-        buttons.addWidget(self.count_label)
         layout.addLayout(buttons)
 
         self._update_count()
@@ -183,14 +176,4 @@ class NameListEditor(QWidget):
 
     def _update_count(self) -> None:
         total = self.count()
-        query = self.search_edit.text().strip()
-        if query:
-            visible = sum(1 for line in self._source_text.splitlines() if query.casefold() in line.casefold())
-            self.count_label.setText(
-                tr("Найдено: {visible} из {total}").format(visible=visible, total=total)
-            )
-            self.count_label.setToolTip(tr("Сколько строк подходит под поиск"))
-        else:
-            self.count_label.setText(tr("ФИО: {count}").format(count=total))
-            self.count_label.setToolTip(tr("Сколько ФИО в списке"))
         self.countChanged.emit(total)
